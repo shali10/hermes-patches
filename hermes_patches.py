@@ -1119,7 +1119,7 @@ def main():
         ensure_runtime_config(dry_run=args.dry_run)
 
     if args.restart and not args.dry_run:
-        restart_gateway_services()
+        restart_gateway_services(target_dir=target)
 
 
 if __name__ == "__main__":
