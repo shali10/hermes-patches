@@ -30,8 +30,8 @@ jobs:
 
       - name: Test Selective Patching (--only & --skip)
         run: |
-          python3 hermes_patches.py --target /tmp/hermes-agent --dry-run --only table db -v
-          python3 hermes_patches.py --target /tmp/hermes-agent --dry-run --skip menu -v
+          python3 hermes_patches.py --target /tmp/hermes-agent --dry-run --only table db nostream -v
+          python3 hermes_patches.py --target /tmp/hermes-agent --dry-run --skip menu clean-think -v
 
       - name: Apply All Patches
         run: |
@@ -45,6 +45,9 @@ jobs:
           python3 -m py_compile /tmp/hermes-agent/hermes_cli/commands.py
           python3 -m py_compile /tmp/hermes-agent/hermes_state.py
           python3 -m py_compile /tmp/hermes-agent/tools/approval.py
+          python3 -m py_compile /tmp/hermes-agent/cli.py
+          python3 -m py_compile /tmp/hermes-agent/gateway/stream_consumer.py
+          python3 -m py_compile /tmp/hermes-agent/gateway/platforms/base.py
 
       - name: Test Idempotency (Run Again)
         run: |

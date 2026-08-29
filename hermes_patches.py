@@ -4,7 +4,9 @@ hermes-patches — Non-intrusive Enhancement Patches for Hermes Agent
 Repository: https://github.com/shali10/hermes-patches
 
 Provides full token metering, CJK native rich table support, Telegram menu localization,
-production database durability enhancements, and low-severity security prompt bypass for Hermes Agent.
+production database durability enhancements, low-severity security prompt bypass,
+gateway streaming control (quiet delivery & flood shield), deep thinking/reasoning suppression,
+and Telegram smart long-message chunking for Hermes Agent.
 """
 from __future__ import annotations
 
@@ -54,6 +56,27 @@ PATCH_REGISTRY = [
         "name": "Tirith Low-Severity Approval Prompt Bypass",
         "method": "patch_approval_tirith",
         "description": "Automatically approves non-blocking LOW/INFO security scanner warnings.",
+    },
+    {
+        "id": "nostream",
+        "aliases": ["no-stream", "quiet-stream", "disable-streaming", "stream-shield"],
+        "name": "Gateway Streaming Control & Telegram Flood Limit Shield",
+        "method": "patch_streaming_control",
+        "description": "Honors global display.streaming configuration and prevents Telegram 429 Flood Control edits.",
+    },
+    {
+        "id": "clean-think",
+        "aliases": ["think", "reasoning", "clean-reasoning", "suppress-thinking"],
+        "name": "Deep Thinking & Reasoning Process Cleaner",
+        "method": "patch_clean_thinking",
+        "description": "Suppresses noisy thinking/reasoning blocks (<think>, <thought>, etc.) in CLI and messaging platforms.",
+    },
+    {
+        "id": "smart-split",
+        "aliases": ["split", "telegram-split", "chunking", "message-chunker"],
+        "name": "Telegram 4096 Safe Long Message Paragraph Chunker",
+        "method": "patch_smart_split",
+        "description": "Splits 4096+ char messages at paragraph breaks to preserve Markdown tables and code fences.",
     },
 ]
 
@@ -393,6 +416,135 @@ def telegram_bot_commands() -> list[tuple[str, str]]:
         return self.apply_file_patch("tools/approval.py", transform, "approval-low-tirith-warn-skip")
 
     # -------------------------------------------------------------
+    # Patch 6: Gateway Streaming Control & Flood Limit Shield
+    # -------------------------------------------------------------
+    def patch_streaming_control(self) -> bool:
+        def transform(src: str) -> str:
+            cand = src
+            if "_global_display_streaming" in cand:
+                return cand
+
+            old_gate = '''        # Per-platform streaming gate: display.platforms.<plat>.streaming
+        # can disable streaming for specific platforms even when the global
+        # streaming config is enabled.
+        _plat_streaming = ctx.resolve_display_setting(
+            ctx.user_config, platform_key, "streaming"
+        )
+        # None = no per-platform override → follow global config
+        _streaming_enabled = (
+            _scfg.enabled and _scfg.transport != "off"
+            if _plat_streaming is None
+            else bool(_plat_streaming)
+        )'''
+
+            new_gate = '''        # Per-platform streaming gate: display.platforms.<plat>.streaming
+        # can disable streaming for specific platforms even when the global
+        # streaming config is enabled.
+        _plat_streaming = ctx.resolve_display_setting(
+            ctx.user_config, platform_key, "streaming"
+        )
+        # Check global display.streaming setting (hermes-patches stream-shield)
+        _global_display_streaming = None
+        if isinstance(ctx.user_config, dict):
+            _global_display_streaming = (ctx.user_config.get("display") or {}).get("streaming")
+        if _plat_streaming is None and _global_display_streaming is not None:
+            _plat_streaming = bool(_global_display_streaming)
+
+        # None = no per-platform override → follow global config
+        _streaming_enabled = (
+            _scfg.enabled and _scfg.transport != "off"
+            if _plat_streaming is None
+            else bool(_plat_streaming)
+        )'''
+
+            if old_gate in cand:
+                cand = cand.replace(old_gate, new_gate, 1)
+            return cand
+
+        return self.apply_file_patch("gateway/run.py", transform, "gateway-streaming-control")
+
+    # -------------------------------------------------------------
+    # Patch 7: Deep Thinking & Reasoning Process Cleaner
+    # -------------------------------------------------------------
+    def patch_clean_thinking(self) -> bool:
+        def transform_cli(src: str) -> str:
+            cand = src
+            # Set default CLI show_reasoning to False
+            cand = cand.replace(
+                'self.show_reasoning = CLI_CONFIG["display"].get("show_reasoning", True)',
+                'self.show_reasoning = CLI_CONFIG["display"].get("show_reasoning", False)',
+            )
+            # Expand OPEN and CLOSE think tags
+            old_open = '_OPEN_TAGS = ("<REASONING_SCRATCHPAD>", "<think>", "<reasoning>", "<THINKING>", "<thinking>", "<thought>")'
+            new_open = '_OPEN_TAGS = ("<REASONING_SCRATCHPAD>", "<think>", "<reasoning>", "<THINKING>", "<thinking>", "<thought>", "<antml:thought>", "<reflection>", "<inner_monologue>")'
+            if old_open in cand:
+                cand = cand.replace(old_open, new_open, 1)
+
+            old_close = '_CLOSE_TAGS = ("</REASONING_SCRATCHPAD>", "</think>", "</reasoning>", "</THINKING>", "</thinking>", "</thought>")'
+            new_close = '_CLOSE_TAGS = ("</REASONING_SCRATCHPAD>", "</think>", "</reasoning>", "</THINKING>", "</thinking>", "</thought>", "</antml:thought>", "</reflection>", "</inner_monologue>")'
+            if old_close in cand:
+                cand = cand.replace(old_close, new_close, 1)
+
+            return cand
+
+        def transform_stream_consumer(src: str) -> str:
+            cand = src
+            old_tags = '''    _OPEN_THINK_TAGS = (
+        "<REASONING_SCRATCHPAD>", "<think>", "<reasoning>",
+        "<THINKING>", "<thinking>", "<thought>",
+    )
+    _CLOSE_THINK_TAGS = (
+        "</REASONING_SCRATCHPAD>", "</think>", "</reasoning>",
+        "</THINKING>", "</thinking>", "</thought>",
+    )'''
+
+            new_tags = '''    _OPEN_THINK_TAGS = (
+        "<REASONING_SCRATCHPAD>", "<think>", "<reasoning>",
+        "<THINKING>", "<thinking>", "<thought>",
+        "<antml:thought>", "<reflection>", "<inner_monologue>",
+    )
+    _CLOSE_THINK_TAGS = (
+        "</REASONING_SCRATCHPAD>", "</think>", "</reasoning>",
+        "</THINKING>", "</thinking>", "</thought>",
+        "</antml:thought>", "</reflection>", "</inner_monologue>",
+    )'''
+            if old_tags in cand:
+                cand = cand.replace(old_tags, new_tags, 1)
+            return cand
+
+        ok1 = self.apply_file_patch("cli.py", transform_cli, "cli-clean-thinking")
+        ok2 = self.apply_file_patch("gateway/stream_consumer.py", transform_stream_consumer, "stream-consumer-clean-thinking")
+        return ok1 and ok2
+
+    # -------------------------------------------------------------
+    # Patch 8: Telegram 4096 Safe Long Message Paragraph Chunker
+    # -------------------------------------------------------------
+    def patch_smart_split(self) -> bool:
+        def transform_base_platform(src: str) -> str:
+            cand = src
+            if "# Prefer paragraph break (\\n\\n)" in cand:
+                return cand
+
+            old_split = '''            region = remaining[:_cp_limit]
+            split_at = region.rfind("\\n")
+            if split_at < _cp_limit // 2:
+                split_at = region.rfind(" ")'''
+
+            new_split = '''            region = remaining[:_cp_limit]
+            # Prefer paragraph break (\\n\\n), then single newline (\\n), then space (hermes-patches smart-split)
+            split_at = region.rfind("\\n\\n")
+            if split_at < _cp_limit // 3:
+                split_at = region.rfind("\\n")
+            if split_at < _cp_limit // 2:
+                split_at = region.rfind(" ")'''
+
+            if old_split in cand:
+                cand = cand.replace(old_split, new_split, 1)
+            return cand
+
+        return self.apply_file_patch("gateway/platforms/base.py", transform_base_platform, "platform-smart-split")
+
+    # -------------------------------------------------------------
     # Execution Filter & Dispatch
     # -------------------------------------------------------------
     def _is_patch_selected(self, patch_meta: dict) -> bool:
@@ -423,7 +575,7 @@ def telegram_bot_commands() -> list[tuple[str, str]]:
         print("\n📋 Execution Summary:")
         for name, status, detail in self.results:
             d_str = f" ({detail})" if detail else ""
-            print(f"  • {name:<35} -> {status.upper()}{d_str}")
+            print(f"  • {name:<45} -> {status.upper()}{d_str}")
 
 
 def find_default_hermes_dir() -> Path:
@@ -451,8 +603,8 @@ Examples:
   # Preview changes without modifying files (Dry Run)
   python3 hermes_patches.py --dry-run -v
 
-  # Apply only Telegram rich table bypass and DB durability patches
-  python3 hermes_patches.py --only table db
+  # Apply only quiet streaming and clean thinking patches
+  python3 hermes_patches.py --only nostream clean-think
 
   # Apply all patches EXCEPT Telegram command menu translation
   python3 hermes_patches.py --skip menu
@@ -465,7 +617,7 @@ Examples:
         "--only",
         nargs="+",
         metavar="PATCH",
-        help="Apply only specified patches (e.g. footer, table, menu, db, tirith)",
+        help="Apply only specified patches (e.g. footer, table, menu, db, tirith, nostream, clean-think, smart-split)",
     )
     parser.add_argument(
         "--skip",
@@ -481,7 +633,7 @@ Examples:
         print("🛠️ Available hermes-patches Modules:\n")
         for p in PATCH_REGISTRY:
             aliases = ", ".join(p["aliases"])
-            print(f"  • ID: {p['id']:<10} (Aliases: {aliases})")
+            print(f"  • ID: {p['id']:<12} (Aliases: {aliases})")
             print(f"    Name: {p['name']}")
             print(f"    Desc: {p['description']}\n")
         sys.exit(0)

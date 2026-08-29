@@ -1,7 +1,7 @@
 # 🛠️ Hermes Patches
 
 > **Non-intrusive Production Enhancement Patches for Hermes Agent**  
-> 给 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 插上全功能之翼 —— **Token 消耗精准计量、Telegram 原生富文本表格放行、中文菜单汉化、生产级 SQLite 锁死与外键自愈、低风险审批免打扰**。
+> 给 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 插上全功能之翼 —— **Token 消耗精准计量、Telegram 原生富文本表格放行、中文菜单汉化、生产级 SQLite 锁死与外键自愈、低风险审批免打扰、流式静默控制与 429 频控护盾、全链路深度思考净化、4096 超长消息智能排版切分**。
 
 <p align="center">
   <a href="README_EN.md"><b>English</b></a> | <b>简体中文</b>
@@ -26,6 +26,9 @@
 | **🇨🇳 Telegram 快捷菜单** | 官方全英文菜单（`/start`, `/new`, `/status`...） | **原生中文本地化**，命令功能与操作一目了然 |
 | **🛡️ 生产数据库自愈** | 高并发写入时易报 `FOREIGN KEY` 缺失或 `database is locked` 崩溃 | **自动外键补齐自愈 + 连接级 `busy_timeout=5000` 争用保护**，彻底杜绝会话中断 |
 | **⚡ 自动化审批免打扰** | 自动化任务易被 LOW/INFO 级静态扫描警告中断弹窗 | **自动放行低风险提示**，高危风险正常拦截，大幅提升自动化流畅度 |
+| **🚫 流式静默与频控护盾** | 中间消息高频 `editMessageText` 导致界面狂闪、手机震动，易触发 Telegram 429 限流 | **支持全局 `display.streaming: false` 优雅静默**，转为一次性完整交付，零抖动、免限流 |
+| **🧠 思考过程深度净化** | 推理模型输出冗长 `<think>` 刷屏，CLI 弹大窗，IM 偶发草稿泄露 | **全链路深度剥离所有思维链变体**（`<think>`, `<thought>`, `<antml:thought>` 及未闭合块），只留干净最终正文 |
+| **✂️ 4096 消息智能切分** | 超过 4096 字符时生硬截断，导致代码块破坏或报 `can't parse entities` | **优先在自然段落（`\n\n`）边界优雅切分**，自动闭合并补齐代码围栏与表格结构 |
 | **🚀 升级自愈守护** | 升级 Hermes 源码或 `hermes update` 会丢失补丁 | **systemd `ExecStartPre` 自动守护**，版本更新后自动重应用，**升级永不失效** |
 
 ---
@@ -85,6 +88,22 @@
 
 ---
 
+### 4. 🚫 流式输出静默与 429 频控防护 (Quiet Streaming)
+
+在 `~/.hermes/config.yaml` 中配置 `display.streaming: false` 后，Gateway 将彻底关闭中间草稿编辑：
+* **零消息跳动**：等待大模型推理完毕后，一次性投递高保真排版消息；
+* **免除 429 限流**：彻底避免长文本生成时高频调用 Telegram `editMessageText` 导致的 Flood Control 封禁。
+
+---
+
+### 5. 🧠 思考过程深度净化 (Deep Thinking Cleaner)
+
+无论是 DeepSeek-R1、QwQ、Claude 3.7 Thinking 还是 Gemini 思考模式：
+* **CLI 端**：默认静音冗长的思维链弹窗，不再占用几十上百行终端；
+* **IM 端**：自动拦截 `<think>`, `<thought>`, `<thinking>`, `<reflection>`, `<antml:thought>` 以及流式中断导致的未闭合残缺标签，保证消息框永远只有整洁干练的最终答复。
+
+---
+
 ## 🏗️ 架构与工作原理 (How It Works)
 
 `hermes-patches` 采用 **非侵入式 AST 级安全代码注入** 与 **服务级生命周期预检守护**：
@@ -107,7 +126,8 @@
                ┌──────────────────────────────┐
                │     Hermes Agent 核心就绪    │
                │  [Token全计量 | 原生表格    │
-               │   DB锁自愈   | 汉化快捷菜单] │
+               │   DB锁自愈   | 汉化快捷菜单  │
+               │   流式静默   | 思考过程净化] │
                └──────────────────────────────┘
 ```
 
@@ -118,110 +138,84 @@
 为防止生产环境意外损坏，引擎内置三重安全防护：
 
 1. **🔬 字节码编译预检 (Atomic Compile Check)**：所有代码修改先在隔离临时文件中执行，并强制通过 Python 原生 `py_compile.compile(..., doraise=True)` 编译。语法校验 100% 通过后方可原子置换（`os.replace`），绝不产生损坏或半成品文件。
-2. **🔄 100% 幂等性设计 (Idempotent)**：引擎精准识别已打补丁的特征签名。重复运行无论多少次均能安全跳过，绝不产生重复插入。
-3. **💾 自动备份与秒级无损回滚**：首次打补丁前自动将原文件备份为 `.bak` 镜像，提供一键卸载还原命令。
+2. **🔄 原生备份与一键还原 (Instant Rollback)**：首次修改自动生成 `.bak` 物理备份。执行 `--uninstall` 即可瞬间无损回滚。
+3. **♻️ 幂等性保障 (Idempotent)**：多次运行或重复执行自动跳过已应用补丁，绝不重复追加或破坏代码结构。
 
 ---
 
-## 🚀 极速安装与使用 (Installation)
+## 🚀 极速安装与部署 (Installation)
 
-### 1. 标准一键安装（推荐）
+### 选项 A：生产环境一键全自动安装（推荐）
 
-在运行 Hermes Agent 的 Linux 服务器上执行以下命令：
+直接在运行 Hermes Agent 的服务器上执行：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash
 ```
 
-### 2. 模块化按需打补丁（可选）
+> **自动完成**：自动寻径 Hermes 源码目录、编译检查并注入补丁、配置 systemd `ExecStartPre` 升级自愈守护。
 
-如果你只想安装部分补丁（例如：仅开启表格放行与数据库自愈，不汉化菜单）：
+---
+
+### 选项 B：模块化与进阶安装 (Advanced Usage)
+
+克隆项目并在本地按需执行：
 
 ```bash
-# 仅安装特定模块 (footer, table, menu, db, tirith)
-curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash -s -- --only table db
+git clone https://github.com/shali10/hermes-patches.git
+cd hermes-patches
 
-# 排除特定模块 (例如跳过中文菜单)
-curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash -s -- --skip menu
+# 1. 查看所有可用补丁模块
+python3 hermes_patches.py --list-patches
+
+# 2. 预览即将执行的改动 (Dry Run，不写入磁盘)
+python3 hermes_patches.py --dry-run -v
+
+# 3. 仅应用特定补丁（如：流式控制、思考净化、表格放行）
+python3 hermes_patches.py --only nostream clean-think table
+
+# 4. 应用除中文菜单外的所有补丁
+python3 hermes_patches.py --skip menu
 ```
 
-### 3. 查看补丁列表与预检 (Dry Run)
+---
+
+## 📦 可用补丁清单 (Patch Registry)
+
+| 补丁 ID | 别名 (Aliases) | 作用目标 | 说明 |
+|---|---|---|---|
+| `footer` | `runtime-footer`, `token`, `stats` | `gateway/runtime_footer.py`<br>`gateway/run.py` | 渲染 Prompt 总量、缓存命中、输出 Token、耗时与上下文占用 |
+| `table` | `cjk-table`, `telegram-table`, `pipe-table` | `plugins/platforms/telegram/adapter.py` | 绕过桌面端 CJK 拦截检查，放行原生 Markdown 表格 |
+| `menu` | `telegram-menu`, `menu-zh`, `i18n` | `hermes_cli/commands.py` | 汉化 Telegram Bot `/start`, `/new`, `/status`... 命令说明 |
+| `db` | `state-db`, `sqlite`, `durability` | `hermes_state.py` | 注入 `busy_timeout=5000` 与会话外键自动补齐自愈 |
+| `tirith` | `approval`, `security`, `low-warn` | `tools/approval.py` | 自动放行 LOW/INFO 级别低危扫描提示，免除弹窗打扰 |
+| `nostream` | `no-stream`, `quiet-stream`, `stream-shield` | `gateway/run.py` | 修复全局 `display.streaming: false` 生效机制，屏蔽 429 频控 |
+| `clean-think` | `think`, `reasoning`, `suppress-thinking` | `cli.py`<br>`gateway/stream_consumer.py` | 净化思考过程与变体标签，默认静音终端冗长思维链弹框 |
+| `smart-split` | `split`, `chunking`, `telegram-split` | `gateway/platforms/base.py` | 4096+ 长消息优先在自然段落切分，保护代码块与表格无损 |
+
+---
+
+## ↩️ 卸载与恢复 (Uninstall)
+
+若需还原至官方原生代码：
 
 ```bash
-# 列出所有可用补丁
-curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash -s -- --list-patches
-
-# 仅预览改动，不实际写入磁盘 (Dry Run)
-curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash -s -- --dry-run -v
-```
-
-### 4. Docker / 容器化环境集成
-
-在自定义 `Dockerfile` 中加入以下构建指令即可：
-
-```dockerfile
-# Dockerfile
-RUN curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash
+bash install.sh --uninstall
 ```
 
 ---
 
-## ⚙️ 配置文件说明 (`~/.hermes/config.yaml`)
+## 🤝 参与贡献与开发 (Contributing)
 
-安装脚本会自动配置。如需自定义页脚显示项，可在 `~/.hermes/config.yaml` 中配置：
+我们非常欢迎社区提交 Issue 与 Pull Request！
 
-```yaml
-display:
-  runtime_footer:
-    enabled: true
-    fields:
-      - model          # 🤖 模型名称
-      - prompt_tokens  # 🧠 Prompt 总量
-      - cache_read     # 💾 缓存命中数与命中率 (%)
-      - output_tokens  # 📤 输出 Token
-      - context_pct    # 🎯 上下文占用百分比
-      - elapsed_time   # ⏱️ 执行耗时 (秒)
-```
+1. Fork 本仓库并新建分支：`git checkout -b feature/awesome-patch`
+2. 添加补丁逻辑并确保通过 `python3 hermes_patches.py --dry-run -v`
+3. 提交代码并推送：`git push origin feature/awesome-patch`
+4. 创建 Pull Request，CI 将自动对 upstream 最新代码执行编译测试与幂等性验证。
 
 ---
 
-## ❓ 常见问题与排查 (FAQ & Troubleshooting)
+## 📄 开源协议 (License)
 
-<details>
-<summary><b>Q: 安装后 Telegram 客户端没有看到新页脚或中文菜单？</b></summary>
-
-> **解答**：修改在 Hermes Gateway 进程重启后生效。在 Telegram 机器人聊天框输入 `/restart`，或在终端执行 `systemctl restart hermes-gateway` 即可生效。
-</details>
-
-<details>
-<summary><b>Q: 升级 Hermes Agent（如 <code>hermes update</code>）后需要重新安装吗？</b></summary>
-
-> **解答**：**完全不需要**。安装脚本已自动向 `hermes-gateway.service` 注入 `ExecStartPre` 守护钩子。每次 Hermes 升级或重启服务时，均会自动重跑幂等补丁引擎，确保特性永不失效。
-</details>
-
-<details>
-<summary><b>Q: 本项目解决了哪些 SQLite 生产报错？</b></summary>
-
-> **解答**：
-> 1. `sqlite3.OperationalError: database is locked`：高并发读写争用。补丁注入 `PRAGMA busy_timeout = 5000` 连接级排队机制。
-> 2. `sqlite3.IntegrityError: FOREIGN KEY constraint failed`：会话父记录未就绪时的孤儿消息写入崩溃。补丁注入 `INSERT OR IGNORE INTO sessions` 自动自愈补齐。
-</details>
-
----
-
-## 🗑️ 一键卸载与恢复 (Uninstall)
-
-如需彻底还原到官方原生代码状态：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash -s -- --uninstall
-```
-
----
-
-## 🤝 参与贡献与致谢
-
-欢迎提交 Issue 和 Pull Request！如果你有更实用的 Hermes 生产补丁，欢迎分享与合并。
-
-- **Upstream Project**: [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)
-- **License**: [MIT](LICENSE)
+本项目基于 [MIT License](LICENSE) 协议开源。

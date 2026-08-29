@@ -1,7 +1,7 @@
 # 🛠️ Hermes Patches
 
 > **Non-intrusive Production Enhancement Patches for Hermes Agent**  
-> Supercharge your [Hermes Agent](https://github.com/NousResearch/hermes-agent) deployment with **exact token telemetry & cache hit metering, Telegram native Markdown pipe table bypass, localized bot command menu, and SQLite production concurrency auto-healing**.
+> Supercharge your [Hermes Agent](https://github.com/NousResearch/hermes-agent) deployment with **exact token telemetry & cache hit metering, Telegram native Markdown pipe table bypass, localized bot command menu, SQLite production concurrency auto-healing, gateway streaming control & rate-limit shield, deep thinking cleaner, and 4096 safe message chunking**.
 
 <p align="center">
   <b>English</b> | <a href="README.md"><b>简体中文</b></a>
@@ -26,6 +26,9 @@
 | **🇨🇳 Telegram Menu i18n** | English default descriptions only | **Localized command descriptions** for clearer command quick-actions. |
 | **🛡️ SQLite Durability** | Prone to `database is locked` or `FOREIGN KEY` crashes during high concurrency | **Automatic `busy_timeout=5000` contention queue + foreign key session auto-healing**. |
 | **⚡ Approval Optimization** | Low-severity static analysis warnings interrupt execution | **Automatic pass-through for non-blocking LOW/INFO scanner warnings**. |
+| **🚫 Streaming Control & 429 Shield** | Rapid `editMessageText` causes UI flickering and triggers Telegram 429 Flood Limits | **Honors global `display.streaming: false`**, delivering complete clean responses in one final delivery without rate-limits. |
+| **🧠 Deep Thinking Cleaner** | Reasoning models spam large `<think>` blocks in CLI and leak partial drafts | **Full suppression of thinking tags** (`<think>`, `<thought>`, `<antml:thought>` & unclosed blocks), leaving only clean responses. |
+| **✂️ 4096 Smart Message Split** | Truncating 4096+ chars breaks code fences or causes `can't parse entities` | **Splits at natural paragraph boundaries (`\n\n`)**, automatically closing and reopening code fences & tables. |
 | **🚀 Upgrade-Immune Guard** | Hermes source updates overwrite local patches | **systemd `ExecStartPre` supervision hook**, automatically re-applying patches on restart. |
 
 ---
@@ -54,6 +57,22 @@
 
 ---
 
+### 3. 🚫 Quiet Streaming & Telegram 429 Shield
+
+Setting `display.streaming: false` in `~/.hermes/config.yaml` cleanly disables interim edits:
+* **Zero Message Flickers**: Waits for completion and delivers full, high-fidelity Markdown formatting.
+* **No Telegram 429 Errors**: Eliminates the risk of Telegram `Flood control exceeded. Retry in N seconds`.
+
+---
+
+### 4. 🧠 Deep Thinking & Reasoning Suppression
+
+For DeepSeek-R1, QwQ, Claude 3.7 Thinking, or Gemini Thinking models:
+* **CLI Mode**: Mutes the verbose thinking box popup by default.
+* **Messaging Mode**: Strips `<think>`, `<thought>`, `<thinking>`, `<reflection>`, `<antml:thought>`, and unclosed partial reasoning blocks.
+
+---
+
 ## 🏗️ Architecture & How It Works
 
 `hermes-patches` uses **safe code injection validated by Python's bytecode compiler** coupled with **systemd startup supervision**:
@@ -76,7 +95,8 @@
                ┌──────────────────────────────┐
                │     Hermes Core Ready        │
                │  [Telemetry | Pipe Tables    │
-               │   DB Healing | Localized UI] │
+               │   DB Healing | Quiet Stream  │
+               │   Clean Think | Smart Split] │
                └──────────────────────────────┘
 ```
 
@@ -100,93 +120,56 @@ Run on your Linux server hosting Hermes Agent:
 curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash
 ```
 
-### 2. Selective / Modular Patching
+---
+
+### 2. Selective & Modular Patching (Advanced)
+
+Clone and run locally:
 
 ```bash
-# Apply specific modules only (footer, table, menu, db, tirith)
-curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash -s -- --only table db
+git clone https://github.com/shali10/hermes-patches.git
+cd hermes-patches
 
-# Skip specific modules (e.g., skip Chinese menu localization)
-curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash -s -- --skip menu
+# 1. List all available patch modules
+python3 hermes_patches.py --list-patches
+
+# 2. Preview changes (Dry Run)
+python3 hermes_patches.py --dry-run -v
+
+# 3. Apply only streaming control, clean thinking, and rich table bypass
+python3 hermes_patches.py --only nostream clean-think table
+
+# 4. Apply all patches EXCEPT menu localization
+python3 hermes_patches.py --skip menu
 ```
 
-### 3. Dry Run / Preview Changes
+---
+
+## 📦 Patch Registry
+
+| Patch ID | Aliases | Target Files | Description |
+|---|---|---|---|
+| `footer` | `runtime-footer`, `token`, `stats` | `gateway/runtime_footer.py`<br>`gateway/run.py` | Full prompt, cache hit, output token, context %, and latency telemetry. |
+| `table` | `cjk-table`, `telegram-table`, `pipe-table` | `plugins/platforms/telegram/adapter.py` | Bypasses desktop CJK rich text garble check to allow native pipe tables. |
+| `menu` | `telegram-menu`, `menu-zh`, `i18n` | `hermes_cli/commands.py` | Localizes Telegram bot command descriptions into Chinese. |
+| `db` | `state-db`, `sqlite`, `durability` | `hermes_state.py` | Injects `busy_timeout=5000` and session foreign key auto-healing. |
+| `tirith` | `approval`, `security`, `low-warn` | `tools/approval.py` | Automatically passes through LOW/INFO static security warnings. |
+| `nostream` | `no-stream`, `quiet-stream`, `stream-shield` | `gateway/run.py` | Honors `display.streaming: false` and shields against Telegram 429 flood limits. |
+| `clean-think` | `think`, `reasoning`, `suppress-thinking` | `cli.py`<br>`gateway/stream_consumer.py` | Cleans thinking/reasoning tags and mutes noisy CLI thinking popups. |
+| `smart-split` | `split`, `chunking`, `telegram-split` | `gateway/platforms/base.py` | Splits 4096+ char messages at paragraph breaks (`\n\n`) to preserve Markdown structure. |
+
+---
+
+## ↩️ Rollback & Uninstall
+
+To cleanly revert all modifications:
 
 ```bash
-# List available patch modules
-curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash -s -- --list-patches
-
-# Inspect diffs without modifying files
-curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash -s -- --dry-run -v
-```
-
-### 4. Docker / Container Integration
-
-Add this line into your `Dockerfile`:
-
-```dockerfile
-# Dockerfile
-RUN curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash
+bash install.sh --uninstall
 ```
 
 ---
 
-## ⚙️ Configuration (`~/.hermes/config.yaml`)
+## 📄 License
 
-The installer configures this automatically. You can customize fields in `~/.hermes/config.yaml`:
-
-```yaml
-display:
-  runtime_footer:
-    enabled: true
-    fields:
-      - model          # 🤖 Model identifier
-      - prompt_tokens  # 🧠 Prompt tokens total
-      - cache_read     # 💾 Cache read hits & percentage (%)
-      - output_tokens  # 📤 Generated output tokens
-      - context_pct    # 🎯 Context window usage (%)
-      - elapsed_time   # ⏱️ Wall-clock turnaround time (seconds)
-```
-
----
-
-## ❓ FAQ & Troubleshooting
-
-<details>
-<summary><b>Q: I don't see the new footer in Telegram after installation.</b></summary>
-
-> **A**: Changes take effect when the Hermes Gateway restarts. Send `/restart` in Telegram or run `systemctl restart hermes-gateway` on your server.
-</details>
-
-<details>
-<summary><b>Q: Do I need to reinstall after updating Hermes Agent (<code>hermes update</code>)?</b></summary>
-
-> **A**: **No**. The installer sets up an `ExecStartPre` hook in `hermes-gateway.service` that re-applies patches automatically on every service start.
-</details>
-
-<details>
-<summary><b>Q: What SQLite issues does this solve?</b></summary>
-
-> **A**:
-> 1. `sqlite3.OperationalError: database is locked`: Mitigated via `PRAGMA busy_timeout = 5000` connection queuing.
-> 2. `sqlite3.IntegrityError: FOREIGN KEY constraint failed`: Auto-healed via `INSERT OR IGNORE INTO sessions`.
-</details>
-
----
-
-## 🗑️ Uninstall
-
-To restore upstream vanilla files:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash -s -- --uninstall
-```
-
----
-
-## 🤝 Contributing
-
-Contributions, bug reports, and suggestions are welcome!
-
-- **Upstream Project**: [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)
-- **License**: [MIT](LICENSE)
+This project is licensed under the [MIT License](LICENSE).
