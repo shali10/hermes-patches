@@ -5,6 +5,15 @@
 
 ---
 
+## [v1.3.2] - 2026-08-29
+
+### 🐛 缺陷修复 (Bug Fixes)
+* **📑 彻底修复 Telegram CJK 原生表格放行补丁因注释特征码不匹配被跳过的重大缺陷**：
+  * 修复了上游 `adapter.py` 函数注释变更导致 `patch_telegram_cjk_rich` 误判为 `UNCHANGED` 未真正修改磁盘文件的严重 Bug。
+  * 改为动态精确覆写 `_has_telegram_desktop_cjk_rich_garble_shape` 函数体，100% 确保含有中文字符的 Markdown Pipe Table 原生放行渲染，不再被降级为无序圆点列表。
+
+---
+
 ## [v1.3.1] - 2026-08-29
 
 ### 🚀 新增特性 (Added)

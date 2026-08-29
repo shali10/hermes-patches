@@ -334,19 +334,19 @@ def format_runtime_footer('''
     def patch_telegram_cjk_rich(self) -> bool:
         def transform(src: str) -> str:
             cand = src
-            old = '''    def _has_telegram_desktop_cjk_rich_garble_shape(self, content: str) -> bool:
-        """True if content contains CJK text that triggers desktop client garble."""
-        if not content:
-            return False'''
+            if "Allow Telegram CJK rich formatting" in cand:
+                return cand
 
-            new = '''    def _has_telegram_desktop_cjk_rich_garble_shape(self, content: str) -> bool:
-        """Allow Telegram CJK rich formatting and native pipe tables (telegram-allow-cjk-rich)."""
-        return False
-        if not content:
-            return False'''
+            old_fn = "def _has_telegram_desktop_cjk_rich_garble_shape(self, content: str) -> bool:"
+            new_fn = """def _has_telegram_desktop_cjk_rich_garble_shape(self, content: str) -> bool:
+        \"\"\"Allow Telegram CJK rich formatting and native pipe tables (telegram-allow-cjk-rich).\"\"\"
+        return False"""
 
-            if "Allow Telegram CJK rich formatting" not in cand and old in cand:
-                cand = cand.replace(old, new, 1)
+            if old_fn in cand:
+                start_idx = cand.find(old_fn)
+                next_fn_idx = cand.find("def _needs_rich_rendering", start_idx)
+                if start_idx >= 0 and next_fn_idx > start_idx:
+                    cand = cand[:start_idx] + new_fn + "\n\n    " + cand[next_fn_idx:]
             return cand
 
         return self.apply_file_patch("plugins/platforms/telegram/adapter.py", transform, "📑 Telegram 原生表格放行")
