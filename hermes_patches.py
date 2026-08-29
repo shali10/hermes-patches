@@ -893,9 +893,14 @@ def ensure_runtime_config(dry_run: bool = False) -> bool:
     """
     Automatically initializes/ensures optimal settings in ~/.hermes/config.yaml:
     - display.language = zh
+    - display.final_response_markdown = keep
+    - display.streaming = false
+    - display.platforms.telegram.streaming = false (quiet delivery & flood shield)
     - display.runtime_footer.enabled = true
     - display.runtime_footer.fields = [model, prompt_tokens, cache_read, output_tokens, context_pct, elapsed_time]
-    - display.platforms.telegram.streaming = false (quiet delivery & flood shield)
+    - telegram.extra.rich_messages = true
+    - telegram.extra.allow_cjk_rich = true
+    - telegram.extra.rich_drafts = false
     """
     config_paths = [
         Path(os.environ.get("HERMES_HOME", "")) / "config.yaml" if os.environ.get("HERMES_HOME") else None,
@@ -915,50 +920,60 @@ def ensure_runtime_config(dry_run: bool = False) -> bool:
         print(f"🟡 [DRY-RUN] 配置文件自动配置预检: {config_file}")
         return True
 
-    # Try official CLI first if available
-    hermes_bin = shutil.which("hermes")
-    if hermes_bin:
-        try:
-            subprocess.run([hermes_bin, "config", "set", "display.language", "zh"], check=False, capture_output=True, timeout=5)
-            subprocess.run([hermes_bin, "config", "set", "display.runtime_footer.enabled", "true"], check=True, capture_output=True, timeout=5)
-            subprocess.run([
-                hermes_bin, "config", "set", "display.runtime_footer.fields",
-                '["model", "prompt_tokens", "cache_read", "output_tokens", "context_pct", "elapsed_time"]'
-            ], check=True, capture_output=True, timeout=5)
-            print(f"🟢 [已自动配置] 成功通过 hermes CLI 激活页脚与计量参数 ({config_file})")
-            return True
-        except Exception:
-            pass
-
-    # Fallback to direct Python / YAML manipulation
     try:
-        config_file.parent.mkdir(parents=True, exist_ok=True)
-        raw_text = config_file.read_text(encoding="utf-8") if config_file.is_file() else ""
-        
-        # Safe append/merge if display block is missing
-        if "runtime_footer:" not in raw_text:
-            footer_yaml = """
-display:
-  language: zh
-  runtime_footer:
-    enabled: true
-    fields:
-      - model
-      - prompt_tokens
-      - cache_read
-      - output_tokens
-      - context_pct
-      - elapsed_time
-"""
-            if "display:" in raw_text:
-                raw_text = raw_text.replace("display:\n", "display:\n  language: zh\n  runtime_footer:\n    enabled: true\n    fields:\n      - model\n      - prompt_tokens\n      - cache_read\n      - output_tokens\n      - context_pct\n      - elapsed_time\n", 1)
-            else:
-                raw_text += footer_yaml
-            
-            config_file.write_text(raw_text, encoding="utf-8")
-            print(f"🟢 [已自动配置] 写入基础语言与页脚计量配置至 {config_file}")
+        import yaml
+        cfg = {}
+        if config_file.is_file():
+            try:
+                cfg = yaml.safe_load(config_file.read_text(encoding="utf-8")) or {}
+            except Exception:
+                cfg = {}
+
+        changed = False
+        display = cfg.setdefault("display", {})
+        if display.get("language") != "zh":
+            display["language"] = "zh"
+            changed = True
+        if display.get("final_response_markdown") != "keep":
+            display["final_response_markdown"] = "keep"
+            changed = True
+        if display.get("streaming") is not False:
+            display["streaming"] = False
+            changed = True
+
+        platforms = display.setdefault("platforms", {})
+        tg_plat = platforms.setdefault("telegram", {})
+        if tg_plat.get("streaming") is not False:
+            tg_plat["streaming"] = False
+            changed = True
+
+        footer = display.setdefault("runtime_footer", {})
+        if not footer.get("enabled"):
+            footer["enabled"] = True
+            changed = True
+        desired_fields = ["model", "prompt_tokens", "cache_read", "output_tokens", "context_pct", "elapsed_time"]
+        if footer.get("fields") != desired_fields:
+            footer["fields"] = desired_fields
+            changed = True
+
+        tg = cfg.setdefault("telegram", {})
+        tg_extra = tg.setdefault("extra", {})
+        if tg_extra.get("rich_messages") is not True:
+            tg_extra["rich_messages"] = True
+            changed = True
+        if tg_extra.get("allow_cjk_rich") is not True:
+            tg_extra["allow_cjk_rich"] = True
+            changed = True
+        if tg_extra.get("rich_drafts") is not False:
+            tg_extra["rich_drafts"] = False
+            changed = True
+
+        if changed:
+            config_file.parent.mkdir(parents=True, exist_ok=True)
+            config_file.write_text(yaml.dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8")
+            print(f"🟢 [已自动配置] 成功同步语言、表格放行、防 429 静默与全量 Footer 至 {config_file}")
         else:
-            print(f"⚪ [已配置] 配置文件已存在 runtime_footer 设定 ({config_file})")
+            print(f"⚪ [已配置] 配置文件已处于最佳运行配置 ({config_file})")
         return True
     except Exception as e:
         print(f"⚠️ [配置提示] 自动修改配置文件跳过: {e}")
