@@ -4,7 +4,7 @@
 > Supercharge your [Hermes Agent](https://github.com/NousResearch/hermes-agent) deployment with **exact token telemetry & cache hit metering, Telegram native Markdown pipe table bypass, localized bot command menu, SQLite production concurrency auto-healing, gateway streaming control & rate-limit shield, deep thinking cleaner, and 4096 safe message chunking**.
 
 <p align="center">
-  <b>English</b> | <a href="README.md"><b>简体中文</b></a>
+  <b>English</b> | <a href="README.md"><b>简体中文</b></a> | <a href="CHANGELOG.md"><b>📝 Changelog</b></a>
 </p>
 
 <p align="center">

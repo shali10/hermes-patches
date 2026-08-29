@@ -4,7 +4,7 @@
 > 给 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 插上全功能之翼 —— **Token 消耗精准计量、Telegram 原生富文本表格放行、中文菜单汉化、生产级 SQLite 锁死与外键自愈、低风险审批免打扰、流式静默控制与 429 频控护盾、全链路深度思考净化、4096 超长消息智能排版切分**。
 
 <p align="center">
-  <a href="README_EN.md"><b>English</b></a> | <b>简体中文</b>
+  <a href="README_EN.md"><b>English</b></a> | <b>简体中文</b> | <a href="CHANGELOG.md"><b>📝 更新日志</b></a>
 </p>
 
 <p align="center">
