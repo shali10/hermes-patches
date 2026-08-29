@@ -1,0 +1,36 @@
+name: Test Patches
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 2 * * *' # Daily test against latest upstream Hermes Agent
+
+jobs:
+  test-patch-injection:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Clone latest upstream Hermes Agent
+        run: |
+          git clone --depth=1 https://github.com/NousResearch/hermes-agent.git /tmp/hermes-agent
+
+      - name: Test Patch Injection Engine
+        run: |
+          python3 hermes_patches.py --target /tmp/hermes-agent --verbose
+
+      - name: Verify Python Syntax
+        run: |
+          python3 -m py_compile /tmp/hermes-agent/gateway/runtime_footer.py
+          python3 -m py_compile /tmp/hermes-agent/gateway/run.py
+          python3 -m py_compile /tmp/hermes-agent/plugins/platforms/telegram/adapter.py
+          python3 -m py_compile /tmp/hermes-agent/hermes_state.py
+          python3 -m py_compile /tmp/hermes-agent/tools/approval.py
