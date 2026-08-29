@@ -5,6 +5,21 @@
 
 ---
 
+## [v1.3.6] - 2026-08-29
+
+### 🎯 计量精准度与安装时序深度加固 (Metering Precision & Installer Hardening)
+- **Token 缓存命中率与 Prompt 总量双重精准校准**：
+  - 深度重构 `patch_runtime_footer` 中的 Token 计量算法。针对 Hermes Gateway 运行时已将 `session_prompt_tokens` 规范化为总量的场景，自动消除二次累加导致的 Prompt 总量虚高与命中率折半偏差。
+  - 智能自适应任何调用源（无论是独立 Miss 输入还是已合并 Total），均能 100% 精确还原真实的物理 Prompt 总量与准确的命中百分比。
+- **一键安装环境依赖自愈 (Venv Auto-Selection)**：
+  - 优化 `install.sh` 解释器查找链，优先使用 Hermes Agent 自身 Virtualenv Python，确保 `yaml` 等配置解析依赖 100% 具备，杜绝精简 Linux 系统因缺少系统级 PyYAML 导致的配置跳过。
+- **systemd 守护挂载时序修复与零副作用预检**：
+  - 修复 `setup_systemd_hook` 在 `--dry-run`、`--list-patches`、`-h` 或菜单展示时的过早写入问题，确保预检与帮助完全零副作用、零磁盘修改。
+- **补丁无缝热升级 (Seamless In-Place Upgrade)**：
+  - `transform_footer` 升级为基于正则的动态循环体覆写，无论之前安装的是 v1.3.0 还是 v1.3.5，再次执行一键安装均可平滑升至最新版。
+
+---
+
 ## [v1.3.5] - 2026-08-29
 
 ### 🐛 关键修复 (Bug Fixes)

@@ -14,13 +14,6 @@ CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
 NC='\033[0m'
 
-# Detect Python
-PYTHON_BIN="$(which python3 || which python || true)"
-if [ -z "$PYTHON_BIN" ]; then
-    echo -e "${RED}错误: 未在系统 PATH 中找到 python3 环境。${NC}"
-    exit 1
-fi
-
 # Multi-stage adaptive detection for active Hermes install directory
 detect_hermes_dir() {
     # 1. Environment variables
@@ -132,6 +125,25 @@ if [ -z "$HERMES_DIR" ]; then
     exit 1
 fi
 
+# Detect best available Python interpreter (prefer Hermes venv with all dependencies)
+PYTHON_BIN=""
+if [ -x "$HERMES_DIR/venv/bin/python" ]; then
+    PYTHON_BIN="$HERMES_DIR/venv/bin/python"
+elif [ -x "/usr/local/lib/hermes-agent/venv/bin/python" ]; then
+    PYTHON_BIN="/usr/local/lib/hermes-agent/venv/bin/python"
+elif [ -x "/opt/hermes-agent/venv/bin/python" ]; then
+    PYTHON_BIN="/opt/hermes-agent/venv/bin/python"
+elif [ -x "$HOME/.hermes/venv/bin/python" ]; then
+    PYTHON_BIN="$HOME/.hermes/venv/bin/python"
+else
+    PYTHON_BIN="$(which python3 || which python || true)"
+fi
+
+if [ -z "$PYTHON_BIN" ] || [ ! -x "$PYTHON_BIN" ]; then
+    echo -e "${RED}错误: 未找到可用的 Python 运行环境。${NC}"
+    exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "")"
 PATCH_SCRIPT="${SCRIPT_DIR}/hermes_patches.py"
 
@@ -206,20 +218,28 @@ EOF
     fi
 }
 
-# Pre-sync the patch script and harden systemd hook before running patches/restart
-setup_systemd_hook
-
 # If CLI arguments are provided, bypass interactive menu and execute directly
 if [ "$#" -gt 0 ]; then
-    echo -e "${BOLD}${BLUE}=== Hermes Agent 体验增强补丁 (hermes-patches) ===${NC}"
-    echo -e "${GREEN}✓ 目标 Hermes 目录: ${BOLD}${HERMES_DIR}${NC}\n"
-    "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --auto-config --restart "$@"
-
     for arg in "$@"; do
-        if [ "$arg" == "--list-patches" ] || [ "$arg" == "--dry-run" ]; then
+        if [ "$arg" == "--list-patches" ] || [ "$arg" == "-h" ] || [ "$arg" == "--help" ]; then
+            "$PYTHON_BIN" "$PATCH_SCRIPT" "$@"
             exit 0
         fi
     done
+
+    for arg in "$@"; do
+        if [ "$arg" == "--dry-run" ]; then
+            echo -e "${BOLD}${BLUE}=== Hermes Agent 体验增强补丁 (hermes-patches) ===${NC}"
+            echo -e "${GREEN}✓ 目标 Hermes 目录: ${BOLD}${HERMES_DIR}${NC}\n"
+            "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" "$@"
+            exit 0
+        fi
+    done
+
+    echo -e "${BOLD}${BLUE}=== Hermes Agent 体验增强补丁 (hermes-patches) ===${NC}"
+    echo -e "${GREEN}✓ 目标 Hermes 目录: ${BOLD}${HERMES_DIR}${NC}\n"
+    setup_systemd_hook
+    "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --auto-config --restart "$@"
 
     echo -e "\n${BOLD}${GREEN}🎉 补丁操作执行完毕，已全量生效！${NC}\n"
     exit 0
@@ -231,7 +251,7 @@ fi
 show_menu() {
     clear 2>/dev/null || true
     echo -e "${BOLD}${CYAN}=====================================================${NC}"
-    echo -e "${BOLD}${BLUE}   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.3.5)   ${NC}"
+    echo -e "${BOLD}${BLUE}   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.3.6)   ${NC}"
     echo -e "${BOLD}${CYAN}=====================================================${NC}"
     echo -e " 目标路径: ${GREEN}${HERMES_DIR}${NC}\n"
     echo -e " ${BOLD}${GREEN}[1] 🚀 全量一键安装、自动配置并平滑重启 (推荐 / 直接回车)${NC}"
@@ -285,6 +305,7 @@ map_num_to_patch() {
 case "$CHOICE" in
     1)
         echo -e "${BLUE}正在全量应用所有增强补丁、自动配置并平滑重启...${NC}\n"
+        setup_systemd_hook
         "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --auto-config --restart --verbose
         ;;
     10)
@@ -312,9 +333,11 @@ case "$CHOICE" in
 
         if [ "${#SELECTED_PATCHES[@]}" -gt 0 ]; then
             echo -e "${BLUE}正在应用选定补丁: ${BOLD}${SELECTED_PATCHES[*]}${NC}\n"
+            setup_systemd_hook
             "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --only "${SELECTED_PATCHES[@]}" --auto-config --restart --verbose
         else
             echo -e "${RED}输入无效，默认全量应用所有补丁...${NC}\n"
+            setup_systemd_hook
             "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --auto-config --restart --verbose
         fi
         ;;

@@ -206,26 +206,10 @@ def format_runtime_footer('''
                 cand = cand.replace(old_sig, new_sig, 1)
 
             # 4. format fields mapping
-            old_model = '''        if field == "model":
-            m = _model_short(model)
-            if m:
-                parts.append(m)
-        elif field == "context_pct":
-            if context_length and context_length > 0 and context_tokens >= 0:
-                pct = max(0, min(100, round((context_tokens / context_length) * 100)))
-                parts.append(f"{pct}%")
-        elif field == "latency":
-            # Wall-clock turn duration. Skipped when the caller supplied no
-            # timing (call sites that don't measure) or the value is negative.
-            if turn_seconds is not None and turn_seconds >= 0:
-                parts.append(_format_latency(turn_seconds))
-        elif field == "cwd":
-            rel = _home_relative_cwd(cwd or os.environ.get("TERMINAL_CWD", ""))
-            if rel:
-                parts.append(rel)
-        # Unknown field names are silently ignored.'''
-
-            new_model = '''        _total_prompt = (prompt_tokens or 0) + (cache_read_tokens or 0)
+            new_loop = '''for field in fields:
+        _p_in = prompt_tokens or 0
+        _c_in = cache_read_tokens or 0
+        _total_prompt = _p_in if _p_in >= _c_in else _p_in + _c_in
         if field == "model":
             m = _model_short(model)
             if m:
@@ -250,11 +234,11 @@ def format_runtime_footer('''
         elif field == "cache_read":
             if _total_prompt and cache_read_tokens is not None and cache_read_tokens >= 0:
                 pct = max(0, min(100, round((cache_read_tokens / _total_prompt) * 100)))
-                parts.append(f"💾 缓存命中: {_fmt_int(cache_read_tokens)} ({pct}%)")
-        # Unknown field names are silently ignored.'''
+                parts.append(f"💾 缓存命中: {_fmt_int(cache_read_tokens)} ({pct}%)")'''
 
-            if "🧠 Prompt总量" not in cand and old_model in cand:
-                cand = cand.replace(old_model, new_model, 1)
+            loop_pat = r'for field in fields:.*?(?=\s*# Unknown field names are silently ignored\.)'
+            if re.search(loop_pat, cand, flags=re.DOTALL):
+                cand = re.sub(loop_pat, new_loop, cand, count=1, flags=re.DOTALL)
 
             # 5. build_footer_line signature & invocation
             old_bf_sig = "def build_footer_line(\n    *,\n    user_config: dict[str, Any] | None,\n    platform_key: str | None,\n    model: Optional[str],\n    context_tokens: int,\n    context_length: Optional[int],\n    cwd: Optional[str] = None,\n    turn_seconds: Optional[float] = None,\n) -> str:"
