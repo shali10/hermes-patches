@@ -197,13 +197,17 @@ setup_systemd_hook() {
 [Service]
 Environment="HERMES_PATCH_SOURCE_ROOT=${HERMES_DIR}"
 Environment="HERMES_SOURCE_DIR=${HERMES_DIR}"
-ExecStartPre=/usr/bin/env python3 $HOME/.hermes/scripts/hermes-local-patches.py --target ${HERMES_DIR}
+ExecStartPre=-/usr/bin/env python3 $HOME/.hermes/scripts/hermes-local-patches.py --target ${HERMES_DIR}
 EOF
-            systemctl daemon-reload || true
+            systemctl reset-failed hermes-gateway 2>/dev/null || true
+            systemctl daemon-reload 2>/dev/null || true
             echo -e "${GREEN}✓ 升级自愈守护已就绪 (/etc/systemd/system/hermes-gateway.service.d/10-local-patches.conf)${NC}"
         fi
     fi
 }
+
+# Pre-sync the patch script and harden systemd hook before running patches/restart
+setup_systemd_hook
 
 # If CLI arguments are provided, bypass interactive menu and execute directly
 if [ "$#" -gt 0 ]; then
@@ -217,7 +221,6 @@ if [ "$#" -gt 0 ]; then
         fi
     done
 
-    setup_systemd_hook
     echo -e "\n${BOLD}${GREEN}🎉 补丁操作执行完毕，已全量生效！${NC}\n"
     exit 0
 fi
@@ -283,7 +286,6 @@ case "$CHOICE" in
     1)
         echo -e "${BLUE}正在全量应用所有增强补丁、自动配置并平滑重启...${NC}\n"
         "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --auto-config --restart --verbose
-        setup_systemd_hook
         ;;
     10)
         echo -e "${YELLOW}正在执行 Dry-Run 预检分析...${NC}\n"
@@ -315,7 +317,6 @@ case "$CHOICE" in
             echo -e "${RED}输入无效，默认全量应用所有补丁...${NC}\n"
             "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --auto-config --restart --verbose
         fi
-        setup_systemd_hook
         ;;
 esac
 

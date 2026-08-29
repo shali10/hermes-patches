@@ -965,20 +965,55 @@ display:
         return False
 
 
-def restart_gateway_services() -> bool:
+def sync_local_patch_script(target_dir: Optional[Path] = None) -> bool:
+    """Sync the active hermes_patches.py to ~/.hermes/scripts/hermes-local-patches.py and harden systemd hook."""
+    try:
+        scripts_dir = Path.home() / ".hermes" / "scripts"
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+        local_script = scripts_dir / "hermes-local-patches.py"
+        cur_script = Path(__file__).resolve()
+
+        if cur_script.is_file() and cur_script != local_script:
+            shutil.copy2(cur_script, local_script)
+            local_script.chmod(0o755)
+
+        # Harden systemd unit drop-in with non-blocking ExecStartPre=-
+        conf_dir = Path("/etc/systemd/system/hermes-gateway.service.d")
+        if conf_dir.is_dir() or (hasattr(os, "geteuid") and os.geteuid() == 0 and Path("/etc/systemd/system").is_dir()):
+            conf_dir.mkdir(parents=True, exist_ok=True)
+            conf_file = conf_dir / "10-local-patches.conf"
+            target_path = target_dir or find_default_hermes_dir()
+            conf_content = f"""[Service]
+Environment="HERMES_PATCH_SOURCE_ROOT={target_path}"
+Environment="HERMES_SOURCE_DIR={target_path}"
+ExecStartPre=-/usr/bin/env python3 {local_script} --target {target_path}
+"""
+            conf_file.write_text(conf_content, encoding="utf-8")
+            if shutil.which("systemctl"):
+                subprocess.run(["systemctl", "daemon-reload"], check=False, capture_output=True)
+        return True
+    except Exception:
+        return False
+
+
+def restart_gateway_services(target_dir: Optional[Path] = None) -> bool:
     """
     Seamlessly restart the active Hermes gateway service via systemd if present,
     or identify running standalone processes.
     """
-    # 1. Systemd service restart
+    # 1. Sync script and ensure non-blocking ExecStartPre before triggering restart
+    sync_local_patch_script(target_dir)
+
+    # 2. Systemd service restart
     if shutil.which("systemctl"):
         try:
             status_proc = subprocess.run(["systemctl", "status", "hermes-gateway"], capture_output=True, text=True)
             if "hermes-gateway.service" in status_proc.stdout or "Loaded:" in status_proc.stdout:
                 print("🔄 正在平滑重启 hermes-gateway 系统服务...")
+                subprocess.run(["systemctl", "reset-failed", "hermes-gateway"], check=False, capture_output=True)
                 subprocess.run(["systemctl", "daemon-reload"], check=False, capture_output=True)
                 restart_proc = subprocess.run(["systemctl", "restart", "hermes-gateway"], capture_output=True, text=True, timeout=15)
-                
+
                 if restart_proc.returncode == 0:
                     time.sleep(1.5)
                     active_proc = subprocess.run(["systemctl", "is-active", "--quiet", "hermes-gateway"])
@@ -990,10 +1025,16 @@ def restart_gateway_services() -> bool:
                         return True
                 else:
                     print(f"⚠️ systemctl restart 失败: {restart_proc.stderr.strip()}")
+                    # Fallback retry with inspecting journal
+                    journal_proc = subprocess.run(["journalctl", "-u", "hermes-gateway", "-n", "10", "--no-pager"], capture_output=True, text=True)
+                    if journal_proc.stdout:
+                        print("\n🔍 故障现场诊断日志:")
+                        for l in journal_proc.stdout.splitlines():
+                            print(f"   {l}")
         except Exception as e:
             print(f"⚠️ 重启服务时发生异常: {e}")
 
-    # 2. Check running processes
+    # 3. Check running processes
     try:
         ps_out = subprocess.check_output(["ps", "-eo", "pid,command"], text=True, errors="ignore")
         pids = []

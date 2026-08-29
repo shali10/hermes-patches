@@ -5,6 +5,16 @@
 
 ---
 
+## [v1.3.4] - 2026-08-29
+
+### 🛡️ 生产级守护加固与 systemd 重启自愈 (Systemd Service Hardening)
+* **🔄 彻底根治 `systemctl restart` 报 control process exited with error code 错误**：
+  * **非阻塞守护语法**：在 `10-local-patches.conf` 中将 `ExecStartPre` 升级为 `ExecStartPre=-...`（容错前缀），即使自愈脚本遇到环境扰动也绝不阻塞 Gateway 主服务正常拉起。
+  * **脚本前置同步机制**：在执行任何补丁注入与服务重启前，第一时间将最新脚本同步覆盖至 `~/.hermes/scripts/hermes-local-patches.py` 并 `daemon-reload`，彻底消除旧脚本残留导致 `ExecStartPre` 崩溃卡死的问题。
+  * **智能失败重试与诊断**：在重启失败时自动执行 `systemctl reset-failed` 并抓取输出 `journalctl` 现场日志。
+
+---
+
 ## [v1.3.3] - 2026-08-29
 
 ### 🛡️ 全补丁矩阵运行时深度加固 (Full Matrix Runtime Hardening)
