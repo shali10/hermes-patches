@@ -4,16 +4,20 @@
 > Supercharge your [Hermes Agent](https://github.com/NousResearch/hermes-agent) deployment with **exact token telemetry & cache hit metering, Telegram native Markdown pipe table bypass, localized bot command menu, SQLite production concurrency auto-healing, gateway streaming control & rate-limit shield, deep thinking cleaner, and 4096 safe message chunking**.
 
 <p align="center">
-  <b>English</b> | <a href="README.md"><b>简体中文</b></a> | <a href="CHANGELOG.md"><b>📝 Changelog</b></a>
+  <b>English</b> | <a href="README.md"><b>简体中文</b></a> | <a href="CHANGELOG.md"><b>📝 Changelog</b></a> | <a href="https://github.com/shali10/hermes-patches/releases"><b>🏷️ Releases</b></a>
 </p>
 
 <p align="center">
+  <a href="https://github.com/shali10/hermes-patches/releases"><img src="https://img.shields.io/github/v/release/shali10/hermes-patches?color=blue&label=Release" alt="Latest Release" /></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-v1.2.0-orange.svg" alt="Changelog" /></a>
   <a href="https://github.com/shali10/hermes-patches/actions/workflows/test.yml"><img src="https://github.com/shali10/hermes-patches/actions/workflows/test.yml/badge.svg" alt="CI Status" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg" alt="Python 3.10+" /></a>
   <a href="https://github.com/NousResearch/hermes-agent"><img src="https://img.shields.io/badge/Hermes_Agent-v0.20%2B-orange.svg" alt="Hermes Agent" /></a>
   <a href="https://github.com/shali10/hermes-patches/pulls"><img src="https://img.shields.io/badge/PRs-welcome-green.svg" alt="PRs Welcome" /></a>
 </p>
+
+> 🧭 **Quick Navigation**: [✨ Features Comparison](#-features--comparison) · [🔍 Showcase](#-showcase) · [🚀 Quick Install](#-quick-start-installation) · [📦 Patch Registry](#-patch-registry) · [📝 Changelog](#-changelog) · [↩️ Rollback](#️-rollback--uninstall)
 
 ---
 
@@ -157,6 +161,18 @@ python3 hermes_patches.py --skip menu
 | `nostream` | `no-stream`, `quiet-stream`, `stream-shield` | `gateway/run.py` | Honors `display.streaming: false` and shields against Telegram 429 flood limits. |
 | `clean-think` | `think`, `reasoning`, `suppress-thinking` | `cli.py`<br>`gateway/stream_consumer.py` | Cleans thinking/reasoning tags and mutes noisy CLI thinking popups. |
 | `smart-split` | `split`, `chunking`, `telegram-split` | `gateway/platforms/base.py` | Splits 4096+ char messages at paragraph breaks (`\n\n`) to preserve Markdown structure. |
+
+---
+
+## 📝 Changelog
+
+| Version | Release Date | Key Updates | Link |
+|:---:|:---:|---|:---:|
+| **`v1.2.0`** | 2026-08-29 | Quiet streaming control (Telegram 429 shield), deep thinking suppression, 4096 smart chunking | [Details 📄](CHANGELOG.md#v120---2026-08-29) |
+| **`v1.1.0`** | 2026-08-29 | Modular `--only` / `--skip` selection, Tirith low-warn bypass, bilingual docs & upstream CI | [Details 📄](CHANGELOG.md#v110---2026-08-29) |
+| **`v1.0.0`** | 2026-08-29 | Token runtime footer, Telegram CJK native tables, menu localization, SQLite lock self-healing | [Details 📄](CHANGELOG.md#v100---2026-08-29) |
+
+👉 **For complete release notes and history, see**: [CHANGELOG.md](CHANGELOG.md) or [GitHub Releases](https://github.com/shali10/hermes-patches/releases)
 
 ---
 

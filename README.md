@@ -4,16 +4,20 @@
 > 给 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 插上全功能之翼 —— **Token 消耗精准计量、Telegram 原生富文本表格放行、中文菜单汉化、生产级 SQLite 锁死与外键自愈、低风险审批免打扰、流式静默控制与 429 频控护盾、全链路深度思考净化、4096 超长消息智能排版切分**。
 
 <p align="center">
-  <a href="README_EN.md"><b>English</b></a> | <b>简体中文</b> | <a href="CHANGELOG.md"><b>📝 更新日志</b></a>
+  <a href="README_EN.md"><b>English</b></a> | <b>简体中文</b> | <a href="CHANGELOG.md"><b>📝 更新日志 (Changelog)</b></a> | <a href="https://github.com/shali10/hermes-patches/releases"><b>🏷️ Releases</b></a>
 </p>
 
 <p align="center">
+  <a href="https://github.com/shali10/hermes-patches/releases"><img src="https://img.shields.io/github/v/release/shali10/hermes-patches?color=blue&label=Release" alt="Latest Release" /></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-v1.2.0-orange.svg" alt="Changelog" /></a>
   <a href="https://github.com/shali10/hermes-patches/actions/workflows/test.yml"><img src="https://github.com/shali10/hermes-patches/actions/workflows/test.yml/badge.svg" alt="CI Status" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg" alt="Python 3.10+" /></a>
   <a href="https://github.com/NousResearch/hermes-agent"><img src="https://img.shields.io/badge/Hermes_Agent-v0.20%2B-orange.svg" alt="Hermes Agent" /></a>
   <a href="https://github.com/shali10/hermes-patches/pulls"><img src="https://img.shields.io/badge/PRs-welcome-green.svg" alt="PRs Welcome" /></a>
 </p>
+
+> 🧭 **快速导航**：[✨ 痛点对照](#-核心特性与生产痛点对照) · [🔍 效果实测](#-功能实测与展示-showcase) · [🚀 一键安装](#-极速安装与部署-installation) · [📦 补丁清单](#-可用补丁清单-patch-registry) · [📝 更新日志](#-更新日志-changelog) · [↩️ 一键卸载](#️-卸载与恢复-uninstall)
 
 ---
 
@@ -192,6 +196,18 @@ python3 hermes_patches.py --skip menu
 | `nostream` | `no-stream`, `quiet-stream`, `stream-shield` | `gateway/run.py` | 修复全局 `display.streaming: false` 生效机制，屏蔽 429 频控 |
 | `clean-think` | `think`, `reasoning`, `suppress-thinking` | `cli.py`<br>`gateway/stream_consumer.py` | 净化思考过程与变体标签，默认静音终端冗长思维链弹框 |
 | `smart-split` | `split`, `chunking`, `telegram-split` | `gateway/platforms/base.py` | 4096+ 长消息优先在自然段落切分，保护代码块与表格无损 |
+
+---
+
+## 📝 更新日志 (Changelog)
+
+| 版本 | 发布日期 | 重点更新摘要 | 详情链接 |
+|:---:|:---:|---|:---:|
+| **`v1.2.0`** | 2026-08-29 | 增加流式静默控制（429 频控护盾）、全链路思考过程净化、4096 长消息智能切分 | [查看详情 📄](CHANGELOG.md#v120---2026-08-29) |
+| **`v1.1.0`** | 2026-08-29 | 增加 `--only` / `--skip` 模块化选择、Tirith 低危审批放行、双语文档与 CI | [查看详情 📄](CHANGELOG.md#v110---2026-08-29) |
+| **`v1.0.0`** | 2026-08-29 | Token 全量指标页脚、Telegram CJK 原生表格、命令汉化、SQLite 锁死自愈 | [查看详情 📄](CHANGELOG.md#v100---2026-08-29) |
+
+👉 **完整版本演进与发布历史请参阅**：[CHANGELOG.md 完整日志文件](CHANGELOG.md) 或 [GitHub Releases 页面](https://github.com/shali10/hermes-patches/releases)
 
 ---
 
