@@ -17,7 +17,7 @@
   <a href="https://github.com/shali10/hermes-patches/pulls"><img src="https://img.shields.io/badge/PRs-welcome-green.svg" alt="PRs Welcome" /></a>
 </p>
 
-> 🧭 **快速导航**：[✨ 痛点对照](#features) · [🔍 效果实测](#showcase) · [🚀 一键安装](#installation) · [📦 补丁清单](#patches) · [📝 更新日志](#changelog) · [↩️ 一键卸载](#uninstall)
+> 🧭 **快速导航**：[✨ 痛点对照](#features) · [🔍 效果实测](#showcase) · [🚀 一键安装](#installation) · [📦 补丁清单](#patches) · [❓ 排障FAQ](#faq) · [📝 更新日志](#changelog) · [↩️ 一键卸载](#uninstall)
 
 ---
 
@@ -202,6 +202,44 @@ python3 hermes_patches.py --skip menu
 | `nostream` | `no-stream`, `quiet-stream`, `stream-shield` | `gateway/run.py` | 修复全局 `display.streaming: false` 生效机制，屏蔽 429 频控 |
 | `clean-think` | `think`, `reasoning`, `suppress-thinking` | `cli.py`<br>`gateway/stream_consumer.py` | 净化思考过程与变体标签，默认静音终端冗长思维链弹框 |
 | `smart-split` | `split`, `chunking`, `telegram-split` | `gateway/platforms/base.py` | 4096+ 长消息优先在自然段落切分，保护代码块与表格无损 |
+
+---
+
+<a id="faq"></a>
+## ❓ 常见问题与排障指南 (FAQ & Troubleshooting)
+
+### Q1: 为什么安装并重启后，消息末尾依然看不到 Token 统计页脚？
+* **原因**：Hermes 官方默认的 `runtime_footer` 开关处于关闭状态。补丁虽然扩展了全量指标代码，但如果会话或配置文件中未激活该功能，Gateway 将不会向消息追加页脚。
+* **解决办法**：
+  1. **最简方法**：在 Telegram 机器人聊天框中直接发送 **`/footer on`** 指令，即可立即开启；
+  2. **命令行开启**：执行 `hermes config set display.runtime_footer.enabled true` 后重启 Gateway。
+
+### Q2: 为什么输入 `/` 看到的快捷指令依然是英文？
+* **原因**：Telegram 客户端在本地有较强的 Bot Commands 缓存机制。虽然服务端在启动时已通过 `setMyCommands` 同步更新，但本地客户端可能未立即重新拉取。
+* **解决办法**：在聊天窗口给 Bot 发送任意消息，或**彻底退出 Telegram 客户端（杀死后台进程）重新打开**即可刷新。
+
+### Q3: 在 Docker / 容器化环境中如何应用补丁？
+* **原因**：在宿主机上直接执行脚本仅影响宿主机的 Python 环境；若 Hermes 部署在 Docker 容器内，需在容器内部执行补丁注入。
+* **解决办法**：
+  ```bash
+  # 进入容器执行一键安装
+  docker exec -it <容器名或ID> bash -c "curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash"
+  # 重启容器
+  docker restart <容器名或ID>
+  ```
+
+### Q4: 如何验证补丁是否真正打入当前运行的 Hermes 源码？
+* **解决办法**：在服务器终端执行 Dry-Run 预检命令：
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash -s -- --dry-run -v
+  ```
+  若显示 `⚪ [已是最新/无需变更 (UNCHANGED)]` 或 `🟢 [已应用 (APPLIED)]`，说明补丁已 100% 注入。如果提示找不到目录，请先通过 `ps aux | grep hermes` 查询真实路径，并通过 `HERMES_SOURCE_DIR=/真实路径 bash install.sh` 安装。
+
+### Q5: 如何正确重启 Hermes Gateway 确保补丁生效？
+* **解决办法**：
+  * **Telegram 远程重启**：直接在 Bot 对话框发送 **`/restart`**；
+  * **Systemd 服务重启**：执行 `systemctl restart hermes-gateway`；
+  * **后台进程重启**：若是通过 `tmux` / `screen` / 后台脚本常驻，请先 kill 掉旧进程后重新启动。
 
 ---
 

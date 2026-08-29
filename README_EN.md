@@ -17,7 +17,7 @@
   <a href="https://github.com/shali10/hermes-patches/pulls"><img src="https://img.shields.io/badge/PRs-welcome-green.svg" alt="PRs Welcome" /></a>
 </p>
 
-> 🧭 **Quick Navigation**: [✨ Features](#features) · [🔍 Showcase](#showcase) · [🚀 Installation](#installation) · [📦 Patches](#patches) · [📝 Changelog](#changelog) · [↩️ Uninstall](#uninstall)
+> 🧭 **Quick Navigation**: [✨ Features](#features) · [🔍 Showcase](#showcase) · [🚀 Installation](#installation) · [📦 Patches](#patches) · [❓ FAQ](#faq) · [📝 Changelog](#changelog) · [↩️ Uninstall](#uninstall)
 
 ---
 
@@ -167,6 +167,42 @@ python3 hermes_patches.py --skip menu
 | `nostream` | `no-stream`, `quiet-stream`, `stream-shield` | `gateway/run.py` | Honors `display.streaming: false` and shields against Telegram 429 flood limits. |
 | `clean-think` | `think`, `reasoning`, `suppress-thinking` | `cli.py`<br>`gateway/stream_consumer.py` | Cleans thinking/reasoning tags and mutes noisy CLI thinking popups. |
 | `smart-split` | `split`, `chunking`, `telegram-split` | `gateway/platforms/base.py` | Splits 4096+ char messages at paragraph breaks (`\n\n`) to preserve Markdown structure. |
+
+---
+
+<a id="faq"></a>
+## ❓ FAQ & Troubleshooting
+
+### Q1: Why don't I see the telemetry footer after applying patches and restarting?
+* **Reason**: Hermes Agent has `display.runtime_footer` disabled by default. While the patch wires up all metrics in the codebase, you still need to activate footer display.
+* **Solution**:
+  1. **Easiest**: Send **`/footer on`** directly to your Telegram bot in chat;
+  2. **Via CLI**: Run `hermes config set display.runtime_footer.enabled true` and restart Gateway.
+
+### Q2: Why are the bot commands still displayed in English when typing `/`?
+* **Reason**: The Telegram client locally caches bot command descriptions.
+* **Solution**: Send a message to the bot or **completely restart/quit your Telegram client app** to force a refresh.
+
+### Q3: How do I install patches inside a Docker container?
+* **Reason**: Running the script on the host OS modifies host Python files, not containerized files.
+* **Solution**: Execute the installer inside your running container:
+  ```bash
+  docker exec -it <container_name_or_id> bash -c "curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash"
+  docker restart <container_name_or_id>
+  ```
+
+### Q4: How do I verify if patches were successfully injected?
+* **Solution**: Run the installer in Dry-Run mode:
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash -s -- --dry-run -v
+  ```
+  If it outputs `⚪ [UNCHANGED]` or `🟢 [APPLIED]`, the patches are 100% active.
+
+### Q5: How do I properly restart Hermes Gateway?
+* **Solution**:
+  * **Telegram Remote**: Send **`/restart`** directly in chat with the bot;
+  * **Systemd**: Run `systemctl restart hermes-gateway`;
+  * **Process**: If running inside `tmux` / `screen`, terminate the existing process and start it afresh.
 
 ---
 
