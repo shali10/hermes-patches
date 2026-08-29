@@ -357,6 +357,8 @@ def format_runtime_footer('''
     def patch_telegram_menu_zh(self) -> bool:
         def transform(src: str) -> str:
             cand = src
+            if "alias_note_zh" in cand and "响应平台启动请求" in cand:
+                return cand
 
             zh_dict_block = '''_TELEGRAM_ZH_DESCRIPTIONS: dict[str, str] = {
     "start": "响应平台启动请求（静默确认）",
