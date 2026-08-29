@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/shali10/hermes-patches/releases"><img src="https://img.shields.io/github/v/release/shali10/hermes-patches?color=blue&label=Release" alt="Latest Release" /></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-v1.3.6-orange.svg" alt="Changelog" /></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-v1.3.7-orange.svg" alt="Changelog" /></a>
   <a href="https://github.com/shali10/hermes-patches/actions/workflows/test.yml"><img src="https://github.com/shali10/hermes-patches/actions/workflows/test.yml/badge.svg" alt="CI Status" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg" alt="Python 3.10+" /></a>

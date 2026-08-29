@@ -5,6 +5,15 @@
 
 ---
 
+## [v1.3.7] - 2026-08-29
+
+### 🎯 运行态取数兼容与双路 Token 注入加固 (Runtime Token Ingestion Fix)
+- **多模型/代理取数双路兼容**：
+  - 在 `gateway/run.py` 注入点改为 `prompt_tokens=agent_result.get("prompt_tokens") or agent_result.get("input_tokens") or 0`，确保无论是从 `turn_finalizer` 还是底层 `CanonicalUsage` 返回，均能正确读取到最顶层的 Prompt 全量数据。
+  - 配合 `runtime_footer.py` 的自适应算法，彻底消除 `agent_result` 字段取数错位问题。
+
+---
+
 ## [v1.3.6] - 2026-08-29
 
 ### 🎯 计量精准度与安装时序深度加固 (Metering Precision & Installer Hardening)

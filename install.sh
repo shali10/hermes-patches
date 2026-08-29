@@ -251,7 +251,7 @@ fi
 show_menu() {
     clear 2>/dev/null || true
     echo -e "${BOLD}${CYAN}=====================================================${NC}"
-    echo -e "${BOLD}${BLUE}   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.3.6)   ${NC}"
+    echo -e "${BOLD}${BLUE}   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.3.7)   ${NC}"
     echo -e "${BOLD}${CYAN}=====================================================${NC}"
     echo -e " 目标路径: ${GREEN}${HERMES_DIR}${NC}\n"
     echo -e " ${BOLD}${GREEN}[1] 🚀 全量一键安装、自动配置并平滑重启 (推荐 / 直接回车)${NC}"

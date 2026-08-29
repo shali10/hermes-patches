@@ -267,16 +267,7 @@ def format_runtime_footer('''
         def transform_gateway_run(src: str) -> str:
             cand = src
             # Parameter injection into build_footer_line
-            old_bfl = '''_footer_line = _bfl(
-                    user_config=_load_gateway_config(),
-                    platform_key=_platform_config_key(source.platform),
-                    model=agent_result.get("model"),
-                    context_tokens=agent_result.get("last_prompt_tokens", 0) or 0,
-                    context_length=agent_result.get("context_length") or None,
-                    cwd=os.environ.get("TERMINAL_CWD", ""),
-                    turn_seconds=_turn_seconds,
-                )'''
-
+            bfl_pat = r'_footer_line\s*=\s*_bfl\(\s*user_config=_load_gateway_config\(\),\s*platform_key=_platform_config_key\(source\.platform\),\s*model=agent_result\.get\("model"\),.*?turn_seconds=_turn_seconds,.*?\)'
             new_bfl = '''_footer_line = _bfl(
                     user_config=_load_gateway_config(),
                     platform_key=_platform_config_key(source.platform),
@@ -285,13 +276,13 @@ def format_runtime_footer('''
                     context_length=agent_result.get("context_length") or None,
                     cwd=os.environ.get("TERMINAL_CWD", ""),
                     turn_seconds=_turn_seconds,
-                    prompt_tokens=agent_result.get("input_tokens") or 0,
+                    prompt_tokens=agent_result.get("prompt_tokens") or agent_result.get("input_tokens") or 0,
                     output_tokens=agent_result.get("output_tokens") or 0,
                     cache_read_tokens=agent_result.get("cache_read_tokens") or 0,
                 )'''
 
-            if 'prompt_tokens=agent_result.get("input_tokens")' not in cand and old_bfl in cand:
-                cand = cand.replace(old_bfl, new_bfl, 1)
+            if re.search(bfl_pat, cand, flags=re.DOTALL):
+                cand = re.sub(bfl_pat, new_bfl, cand, count=1, flags=re.DOTALL)
 
             # platform key compatibility
             old_pkey = '''def _platform_config_key(platform: "Platform") -> str:
