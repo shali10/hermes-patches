@@ -139,7 +139,7 @@ PATCH_SCRIPT="${SCRIPT_DIR}/hermes_patches.py"
 if [ ! -f "$PATCH_SCRIPT" ]; then
     TEMP_DIR=$(mktemp -d)
     trap 'rm -rf "$TEMP_DIR"' EXIT
-    curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/hermes_patches.py -o "$TEMP_DIR/hermes_patches.py"
+    curl -fsSL "https://raw.githubusercontent.com/shali10/hermes-patches/main/hermes_patches.py?nocache=$(date +%s)" -o "$TEMP_DIR/hermes_patches.py"
     PATCH_SCRIPT="$TEMP_DIR/hermes_patches.py"
 fi
 
