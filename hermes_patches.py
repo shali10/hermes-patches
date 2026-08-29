@@ -25,60 +25,70 @@ PATCH_REGISTRY = [
     {
         "id": "footer",
         "aliases": ["runtime-footer", "token", "tokens", "stats"],
-        "name": "Runtime Footer (Full Tokens, Cache Hit, Percent & Latency)",
+        "name": "📊 Runtime Footer (Token全量计量/缓存命中/耗时)",
         "method": "patch_runtime_footer",
-        "description": "Exposes prompt tokens, cache hits, output tokens, context %, and latency in message footer.",
+        "description": "在消息页脚展示 Prompt 总量、缓存命中数及百分比、输出 Token、上下文比例与执行耗时。",
     },
     {
         "id": "table",
         "aliases": ["cjk-table", "telegram-table", "telegram-rich", "pipe-table"],
-        "name": "Telegram CJK Native Pipe Table Bypass",
+        "name": "📑 Telegram CJK 原生 Markdown 表格放行",
         "method": "patch_telegram_cjk_rich",
-        "description": "Bypasses desktop CJK rich text garble check to allow modern native pipe tables.",
+        "description": "绕过桌面端 CJK 字符乱码检测，100% 允许 Telegram 客户端原生高保真表格渲染。",
     },
     {
         "id": "menu",
         "aliases": ["telegram-menu", "menu-zh", "i18n", "localization"],
-        "name": "Telegram Bot Command Menu Localization (Chinese)",
+        "name": "🇨🇳 Telegram 快捷命令中文菜单汉化",
         "method": "patch_telegram_menu_zh",
-        "description": "Translates default /start, /new, /reset, /status... bot menu descriptions to Chinese.",
+        "description": "将 /start, /new, /reset, /status... 等 Bot 快捷指令描述汉化为地道中文。",
     },
     {
         "id": "db",
         "aliases": ["state-db", "sqlite", "durability", "concurrency"],
-        "name": "SQLite State DB Durability & Foreign Key Auto-Healing",
+        "name": "🛡️ SQLite 生产级外键自愈与高并发防锁死",
         "method": "patch_state_db",
-        "description": "Sets busy_timeout=5000 and auto-heals orphan session rows during high concurrency.",
+        "description": "设置连接级 busy_timeout=5000 缓解锁表，并自动补齐会话父记录根除外键崩溃。",
     },
     {
         "id": "tirith",
         "aliases": ["approval", "security", "low-warn"],
-        "name": "Tirith Low-Severity Approval Prompt Bypass",
+        "name": "⚡ Tirith 低风险扫描审批免打扰",
         "method": "patch_approval_tirith",
-        "description": "Automatically approves non-blocking LOW/INFO security scanner warnings.",
+        "description": "自动放行 LOW/INFO 级别的低危静态扫描提示，高危风险正常拦截，提升自动化流畅度。",
     },
     {
         "id": "nostream",
         "aliases": ["no-stream", "quiet-stream", "disable-streaming", "stream-shield"],
-        "name": "Gateway Streaming Control & Telegram Flood Limit Shield",
+        "name": "🚫 流式输出静默控制与 429 频控护盾",
         "method": "patch_streaming_control",
-        "description": "Honors global display.streaming configuration and prevents Telegram 429 Flood Control edits.",
+        "description": "支持全局 display.streaming: false 优雅静默，消除中间消息狂闪并彻底免除 429 封禁。",
     },
     {
         "id": "clean-think",
         "aliases": ["think", "reasoning", "clean-reasoning", "suppress-thinking"],
-        "name": "Deep Thinking & Reasoning Process Cleaner",
+        "name": "🧠 全链路深度思考过程强力净化",
         "method": "patch_clean_thinking",
-        "description": "Suppresses noisy thinking/reasoning blocks (<think>, <thought>, etc.) in CLI and messaging platforms.",
+        "description": "全链路剥离 <think> 等变体思考标签与未闭合块，CLI 默认静音冗余思维链弹框。",
     },
     {
         "id": "smart-split",
         "aliases": ["split", "telegram-split", "chunking", "message-chunker"],
-        "name": "Telegram 4096 Safe Long Message Paragraph Chunker",
+        "name": "✂️ Telegram 4096 长消息智能段落切分",
         "method": "patch_smart_split",
-        "description": "Splits 4096+ char messages at paragraph breaks to preserve Markdown tables and code fences.",
+        "description": "4096+ 字符长消息优先在自然段落 (\\n\\n) 边界切分，自动补齐代码围栏与表格结构。",
     },
 ]
+
+
+STATUS_MAP = {
+    "applied": ("🟢", "已应用 (APPLIED)"),
+    "unchanged": ("⚪", "已是最新/无需变更 (UNCHANGED)"),
+    "dry-run": ("🟡", "待应用 (DRY-RUN)"),
+    "skipped": ("⚪", "已跳过 (SKIPPED)"),
+    "failed": ("🔴", "应用失败 (FAILED)"),
+    "error": ("🔴", "错误 (ERROR)"),
+}
 
 
 class PatchEngine:
@@ -100,7 +110,8 @@ class PatchEngine:
     def log(self, patch_name: str, status: str, detail: str = ""):
         self.results.append((patch_name, status, detail))
         if self.verbose:
-            msg = f"[{status.upper()}] {patch_name}"
+            icon, label = STATUS_MAP.get(status, ("•", status.upper()))
+            msg = f"{icon} [{label}] {patch_name}"
             if detail:
                 msg += f" ({detail})"
             print(msg)
@@ -108,27 +119,27 @@ class PatchEngine:
     def apply_file_patch(self, rel_path: str, transform: Callable[[str], str], patch_name: str) -> bool:
         target_file = self.target_dir / rel_path
         if not target_file.is_file():
-            self.log(patch_name, "skipped", f"file not found: {rel_path}")
+            self.log(patch_name, "skipped", f"未找到目标文件: {rel_path}")
             return False
 
         try:
             source = target_file.read_text(encoding="utf-8")
         except Exception as e:
-            self.log(patch_name, "error", f"failed to read {rel_path}: {e}")
+            self.log(patch_name, "error", f"读取文件失败 {rel_path}: {e}")
             return False
 
         try:
             candidate = transform(source)
         except Exception as e:
-            self.log(patch_name, "error", f"transform exception: {e}")
+            self.log(patch_name, "error", f"转换代码异常: {e}")
             return False
 
         if candidate == source:
-            self.log(patch_name, "unchanged", "already applied or shape not matched")
+            self.log(patch_name, "unchanged", "签名已存在或无需变更")
             return True
 
         if self.dry_run:
-            self.log(patch_name, "dry-run", "changes ready to apply")
+            self.log(patch_name, "dry-run", "代码变更预检通过，等待写入")
             return True
 
         # Backup original
@@ -145,11 +156,11 @@ class PatchEngine:
             py_compile.compile(str(temp_path), doraise=True)
             os.replace(temp_path, target_file)
             py_compile.compile(str(target_file), doraise=True)
-            self.log(patch_name, "applied", f"updated {rel_path}")
+            self.log(patch_name, "applied", f"成功更新 {rel_path}")
             return True
         except Exception as e:
             temp_path.unlink(missing_ok=True)
-            self.log(patch_name, "failed", f"py_compile error: {e}")
+            self.log(patch_name, "failed", f"py_compile 编译校验失败: {e}")
             return False
 
     # -------------------------------------------------------------
@@ -296,8 +307,8 @@ def format_runtime_footer('''
 
             return cand
 
-        ok1 = self.apply_file_patch("gateway/runtime_footer.py", transform_footer, "runtime-footer-cjk")
-        ok2 = self.apply_file_patch("gateway/run.py", transform_gateway_run, "gateway-run-footer-wiring")
+        ok1 = self.apply_file_patch("gateway/runtime_footer.py", transform_footer, "📊 Runtime Footer 全量计量")
+        ok2 = self.apply_file_patch("gateway/run.py", transform_gateway_run, "⚙️ Gateway 运行态参数注入")
         return ok1 and ok2
 
     # -------------------------------------------------------------
@@ -321,7 +332,7 @@ def format_runtime_footer('''
                 cand = cand.replace(old, new, 1)
             return cand
 
-        return self.apply_file_patch("plugins/platforms/telegram/adapter.py", transform, "telegram-allow-cjk-rich")
+        return self.apply_file_patch("plugins/platforms/telegram/adapter.py", transform, "📑 Telegram 原生表格放行")
 
     # -------------------------------------------------------------
     # Patch 3: Telegram Menu Chinese Localization
@@ -367,7 +378,7 @@ def telegram_bot_commands() -> list[tuple[str, str]]:
             cand = src.replace("def telegram_bot_commands() -> list[tuple[str, str]]:", "_RAW_TELEGRAM_BOT_COMMANDS: list[tuple[str, str]] = [", 1)
             return src[:start] + patch_block + src[end:]
 
-        return self.apply_file_patch("hermes_cli/commands.py", transform, "telegram-menu-zh")
+        return self.apply_file_patch("hermes_cli/commands.py", transform, "🇨🇳 Telegram 快捷菜单汉化")
 
     # -------------------------------------------------------------
     # Patch 4: State DB Foreign Key & Contention Self-Heal
@@ -394,7 +405,7 @@ def telegram_bot_commands() -> list[tuple[str, str]]:
 
             return cand
 
-        return self.apply_file_patch("hermes_state.py", transform, "state-db-durability")
+        return self.apply_file_patch("hermes_state.py", transform, "🛡️ SQLite 外键自愈与防锁表")
 
     # -------------------------------------------------------------
     # Patch 5: Tirith Low-Severity Approval Prompt Skip
@@ -424,7 +435,7 @@ def telegram_bot_commands() -> list[tuple[str, str]]:
                 cand = cand.replace(old_check, new_check, 1)
             return cand
 
-        return self.apply_file_patch("tools/approval.py", transform, "approval-low-tirith-warn-skip")
+        return self.apply_file_patch("tools/approval.py", transform, "⚡ Tirith 低风险免打扰")
 
     # -------------------------------------------------------------
     # Patch 6: Gateway Streaming Control & Flood Limit Shield
@@ -472,7 +483,7 @@ def telegram_bot_commands() -> list[tuple[str, str]]:
                 cand = cand.replace(old_gate, new_gate, 1)
             return cand
 
-        return self.apply_file_patch("gateway/run.py", transform, "gateway-streaming-control")
+        return self.apply_file_patch("gateway/run.py", transform, "🚫 流式控制与 429 护盾")
 
     # -------------------------------------------------------------
     # Patch 7: Deep Thinking & Reasoning Process Cleaner
@@ -523,8 +534,8 @@ def telegram_bot_commands() -> list[tuple[str, str]]:
                 cand = cand.replace(old_tags, new_tags, 1)
             return cand
 
-        ok1 = self.apply_file_patch("cli.py", transform_cli, "cli-clean-thinking")
-        ok2 = self.apply_file_patch("gateway/stream_consumer.py", transform_stream_consumer, "stream-consumer-clean-thinking")
+        ok1 = self.apply_file_patch("cli.py", transform_cli, "🧠 CLI 终端思考过程静音")
+        ok2 = self.apply_file_patch("gateway/stream_consumer.py", transform_stream_consumer, "🧠 Gateway 思考标签深度净化")
         return ok1 and ok2
 
     # -------------------------------------------------------------
@@ -553,7 +564,7 @@ def telegram_bot_commands() -> list[tuple[str, str]]:
                 cand = cand.replace(old_split, new_split, 1)
             return cand
 
-        return self.apply_file_patch("gateway/platforms/base.py", transform_base_platform, "platform-smart-split")
+        return self.apply_file_patch("gateway/platforms/base.py", transform_base_platform, "✂️ Telegram 4096 智能段落切分")
 
     # -------------------------------------------------------------
     # Execution Filter & Dispatch
@@ -573,20 +584,21 @@ def telegram_bot_commands() -> list[tuple[str, str]]:
         return True
 
     def run_all(self):
-        print(f"🚀 Running hermes-patches against: {self.target_dir}")
+        print(f"🚀 正在针对目标目录执行补丁注入: {self.target_dir}")
         for item in PATCH_REGISTRY:
             if not self._is_patch_selected(item):
-                self.log(item["name"], "skipped", "excluded by --only / --skip")
+                self.log(item["name"], "skipped", "通过 --only / --skip 参数排除")
                 continue
             method_name = item["method"]
             method = getattr(self, method_name, None)
             if callable(method):
                 method()
 
-        print("\n📋 Execution Summary:")
+        print("\n📋 补丁执行结果汇总 (Execution Summary):")
         for name, status, detail in self.results:
+            icon, label = STATUS_MAP.get(status, ("•", status.upper()))
             d_str = f" ({detail})" if detail else ""
-            print(f"  • {name:<45} -> {status.upper()}{d_str}")
+            print(f"  {icon} {name:<42} -> {label}{d_str}")
 
 
 def find_default_hermes_dir() -> Path:
@@ -625,55 +637,55 @@ def find_default_hermes_dir() -> Path:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Apply non-intrusive runtime enhancement patches to Hermes Agent.",
+        description="Hermes Agent 生产级体验增强补丁与扩展注入工具。",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  # Apply all patches to default Hermes Agent installation
+常用示例:
+  # 全量应用所有增强补丁
   python3 hermes_patches.py
 
-  # Preview changes without modifying files (Dry Run)
+  # 预览变更而不写入磁盘 (Dry Run)
   python3 hermes_patches.py --dry-run -v
 
-  # Apply only quiet streaming and clean thinking patches
+  # 仅应用特定补丁 (如流式静默与思考净化)
   python3 hermes_patches.py --only nostream clean-think
 
-  # Apply all patches EXCEPT Telegram command menu translation
+  # 应用除菜单汉化外的所有补丁
   python3 hermes_patches.py --skip menu
         """,
     )
-    parser.add_argument("--target", type=str, default="", help="Target Hermes Agent install directory")
-    parser.add_argument("--dry-run", action="store_true", help="Inspect changes without writing to disk")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    parser.add_argument("--target", type=str, default="", help="指定 Hermes Agent 源码安装目录")
+    parser.add_argument("--dry-run", action="store_true", help="预检模式：仅检查变更，不修改磁盘文件")
+    parser.add_argument("--verbose", "-v", action="store_true", help="输出详细执行日志")
     parser.add_argument(
         "--only",
         nargs="+",
         metavar="PATCH",
-        help="Apply only specified patches (e.g. footer, table, menu, db, tirith, nostream, clean-think, smart-split)",
+        help="仅应用指定的补丁模块 (如 footer, table, menu, db, tirith, nostream, clean-think, smart-split)",
     )
     parser.add_argument(
         "--skip",
         nargs="+",
         metavar="PATCH",
-        help="Skip specified patches (e.g. menu, tirith)",
+        help="跳过指定的补丁模块 (如 menu, tirith)",
     )
-    parser.add_argument("--list-patches", action="store_true", help="List all available patch modules and exit")
+    parser.add_argument("--list-patches", action="store_true", help="列出所有可用补丁模块并退出")
 
     args = parser.parse_args()
 
     if args.list_patches:
-        print("🛠️ Available hermes-patches Modules:\n")
+        print("🛠️ 可用的 hermes-patches 模块清单:\n")
         for p in PATCH_REGISTRY:
             aliases = ", ".join(p["aliases"])
-            print(f"  • ID: {p['id']:<12} (Aliases: {aliases})")
-            print(f"    Name: {p['name']}")
-            print(f"    Desc: {p['description']}\n")
+            print(f"  • 模块 ID : {p['id']:<12} (别名: {aliases})")
+            print(f"    模块名称: {p['name']}")
+            print(f"    功能说明: {p['description']}\n")
         sys.exit(0)
 
     target = Path(args.target) if args.target else find_default_hermes_dir()
     if not (target / "hermes_state.py").is_file():
-        print(f"❌ Error: Target directory '{target}' does not appear to be a valid Hermes Agent installation.", file=sys.stderr)
-        print("Please provide --target /path/to/hermes-agent or set HERMES_SOURCE_DIR.", file=sys.stderr)
+        print(f"❌ 错误: 目标目录 '{target}' 未检测到有效的 Hermes Agent 安装。", file=sys.stderr)
+        print("请通过 --target /path/to/hermes-agent 或环境变量 HERMES_SOURCE_DIR 指定路径。", file=sys.stderr)
         sys.exit(1)
 
     engine = PatchEngine(
