@@ -225,7 +225,8 @@ def format_runtime_footer('''
                 parts.append(rel)
         # Unknown field names are silently ignored.'''
 
-            new_model = '''        if field == "model":
+            new_model = '''        _total_prompt = (prompt_tokens or 0) + (cache_read_tokens or 0)
+        if field == "model":
             m = _model_short(model)
             if m:
                 parts.append(f"🤖 {m}")
@@ -241,14 +242,14 @@ def format_runtime_footer('''
             if rel:
                 parts.append(rel)
         elif field == "prompt_tokens":
-            if prompt_tokens:
-                parts.append(f"🧠 Prompt总量: {_fmt_int(prompt_tokens)}")
+            if _total_prompt:
+                parts.append(f"🧠 Prompt总量: {_fmt_int(_total_prompt)}")
         elif field == "output_tokens":
             if output_tokens:
                 parts.append(f"📤 输出: {_fmt_int(output_tokens)}")
         elif field == "cache_read":
-            if prompt_tokens and cache_read_tokens >= 0:
-                pct = max(0, min(100, round((cache_read_tokens / prompt_tokens) * 100)))
+            if _total_prompt and cache_read_tokens is not None and cache_read_tokens >= 0:
+                pct = max(0, min(100, round((cache_read_tokens / _total_prompt) * 100)))
                 parts.append(f"💾 缓存命中: {_fmt_int(cache_read_tokens)} ({pct}%)")
         # Unknown field names are silently ignored.'''
 
