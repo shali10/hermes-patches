@@ -17,10 +17,11 @@
   <a href="https://github.com/shali10/hermes-patches/pulls"><img src="https://img.shields.io/badge/PRs-welcome-green.svg" alt="PRs Welcome" /></a>
 </p>
 
-> 🧭 **快速导航**：[✨ 痛点对照](#-核心特性与生产痛点对照) · [🔍 效果实测](#-功能实测与展示-showcase) · [🚀 一键安装](#-极速安装与部署-installation) · [📦 补丁清单](#-可用补丁清单-patch-registry) · [📝 更新日志](#-更新日志-changelog) · [↩️ 一键卸载](#️-卸载与恢复-uninstall)
+> 🧭 **快速导航**：[✨ 痛点对照](#features) · [🔍 效果实测](#showcase) · [🚀 一键安装](#installation) · [📦 补丁清单](#patches) · [📝 更新日志](#changelog) · [↩️ 一键卸载](#uninstall)
 
 ---
 
+<a id="features"></a>
 ## ✨ 核心特性与生产痛点对照
 
 | 模块 | 官方原生状态 | 安装 hermes-patches 后 ✨ |
@@ -37,6 +38,7 @@
 
 ---
 
+<a id="showcase"></a>
 ## 🔍 功能实测与展示 (Showcase)
 
 ### 1. 📊 Token 消耗与缓存命中全透视 (Runtime Footer)
@@ -108,6 +110,7 @@
 
 ---
 
+<a id="architecture"></a>
 ## 🏗️ 架构与工作原理 (How It Works)
 
 `hermes-patches` 采用 **非侵入式 AST 级安全代码注入** 与 **服务级生命周期预检守护**：
@@ -137,6 +140,7 @@
 
 ---
 
+<a id="safety"></a>
 ## 🛡️ 生产级安全防护机制 (Safety First)
 
 为防止生产环境意外损坏，引擎内置三重安全防护：
@@ -147,6 +151,7 @@
 
 ---
 
+<a id="installation"></a>
 ## 🚀 极速安装与部署 (Installation)
 
 ### 选项 A：生产环境一键全自动安装（推荐）
@@ -184,6 +189,7 @@ python3 hermes_patches.py --skip menu
 
 ---
 
+<a id="patches"></a>
 ## 📦 可用补丁清单 (Patch Registry)
 
 | 补丁 ID | 别名 (Aliases) | 作用目标 | 说明 |
@@ -199,6 +205,7 @@ python3 hermes_patches.py --skip menu
 
 ---
 
+<a id="changelog"></a>
 ## 📝 更新日志 (Changelog)
 
 | 版本 | 发布日期 | 重点更新摘要 | 详情链接 |
@@ -211,6 +218,7 @@ python3 hermes_patches.py --skip menu
 
 ---
 
+<a id="uninstall"></a>
 ## ↩️ 卸载与恢复 (Uninstall)
 
 若需还原至官方原生代码：
@@ -221,6 +229,7 @@ bash install.sh --uninstall
 
 ---
 
+<a id="contributing"></a>
 ## 🤝 参与贡献与开发 (Contributing)
 
 我们非常欢迎社区提交 Issue 与 Pull Request！

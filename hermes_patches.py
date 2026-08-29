@@ -6,7 +6,7 @@ Repository: https://github.com/shali10/hermes-patches
 Provides full token metering, CJK native rich table support, Telegram menu localization,
 production database durability enhancements, low-severity security prompt bypass,
 gateway streaming control (quiet delivery & flood shield), deep thinking/reasoning suppression,
-and Telegram smart long-message chunking for Hermes Agent.
+and Telegram 4096 safe long-message chunking for Hermes Agent.
 """
 from __future__ import annotations
 
@@ -237,6 +237,17 @@ def format_runtime_footer('''
             new_bf_call = '        fields=cfg.get("fields") or _DEFAULT_FIELDS,\n        prompt_tokens=prompt_tokens,\n        output_tokens=output_tokens,\n        cache_read_tokens=cache_read_tokens,\n    )'
             if "prompt_tokens=prompt_tokens," not in cand and old_bf_call in cand:
                 cand = cand.replace(old_bf_call, new_bf_call, 1)
+
+            # 6. Default fields and default enabled in resolve_footer_config
+            old_df = '_DEFAULT_FIELDS: tuple[str, ...] = ("model", "context_pct", "cwd")'
+            new_df = '_DEFAULT_FIELDS: tuple[str, ...] = ("model", "prompt_tokens", "cache_read", "output_tokens", "context_pct", "elapsed_time")'
+            if old_df in cand:
+                cand = cand.replace(old_df, new_df, 1)
+
+            old_res = 'resolved = {"enabled": False, "fields": list(_DEFAULT_FIELDS)}'
+            new_res = 'resolved = {"enabled": True, "fields": list(_DEFAULT_FIELDS)}'
+            if old_res in cand:
+                cand = cand.replace(old_res, new_res, 1)
 
             return cand
 
@@ -579,12 +590,33 @@ def telegram_bot_commands() -> list[tuple[str, str]]:
 
 
 def find_default_hermes_dir() -> Path:
-    candidates = [
-        Path(os.environ.get("HERMES_SOURCE_DIR", "")),
+    candidates: List[Path] = []
+    
+    # 1. HERMES_SOURCE_DIR env
+    env_dir = os.environ.get("HERMES_SOURCE_DIR", "").strip()
+    if env_dir:
+        candidates.append(Path(env_dir))
+
+    # 2. Dynamic probe via `which hermes` CLI path
+    hermes_bin = shutil.which("hermes")
+    if hermes_bin:
+        try:
+            real_bin = Path(hermes_bin).resolve()
+            for parent in [real_bin.parent, real_bin.parent.parent, real_bin.parent.parent.parent]:
+                if (parent / "hermes_state.py").is_file():
+                    candidates.append(parent)
+        except Exception:
+            pass
+
+    # 3. Standard system locations
+    candidates.extend([
         Path("/usr/local/lib/hermes-agent"),
         Path("/opt/hermes-agent"),
+        Path.home() / ".local/lib/hermes-agent",
+        Path("/usr/lib/hermes-agent"),
         Path(sys.prefix) / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages",
-    ]
+    ])
+
     for c in candidates:
         if c and c.is_dir() and (c / "hermes_state.py").is_file():
             return c

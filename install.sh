@@ -17,7 +17,7 @@ echo -e "${BOLD}${BLUE}=== Hermes Agent Enhancement Patches (hermes-patches) ===
 # Detect Python
 PYTHON_BIN="$(which python3 || which python || true)"
 if [ -z "$PYTHON_BIN" ]; then
-    echo -e "${RED}Error: python3 not found.${NC}"
+    echo -e "${RED}Error: python3 not found in PATH.${NC}"
     exit 1
 fi
 
@@ -28,10 +28,28 @@ detect_hermes_dir() {
         return 0
     fi
 
+    # 1. Probe via `which hermes` CLI path resolution
+    if command -v hermes >/dev/null 2>&1; then
+        local h_bin
+        h_bin=$(readlink -f "$(command -v hermes)" 2>/dev/null || true)
+        if [ -n "$h_bin" ]; then
+            for depth in 1 2 3; do
+                local h_cand
+                h_cand="$(cd "$(dirname "$h_bin")/$(printf '../%.0s' $(seq 1 $depth))" 2>/dev/null && pwd)"
+                if [ -d "$h_cand" ] && [ -f "$h_cand/hermes_state.py" ]; then
+                    echo "$h_cand"
+                    return 0
+                fi
+            done
+        fi
+    fi
+
+    # 2. Standard system locations
     local candidates=(
         "/usr/local/lib/hermes-agent"
         "/opt/hermes-agent"
         "$HOME/.local/lib/hermes-agent"
+        "/usr/lib/hermes-agent"
     )
     for c in "${candidates[@]}"; do
         if [ -d "$c" ] && [ -f "$c/hermes_state.py" ]; then
@@ -40,7 +58,7 @@ detect_hermes_dir() {
         fi
     done
 
-    # Try pip site-packages
+    # 3. Pip site-packages probing
     local site_pkg
     site_pkg=$("$PYTHON_BIN" -c "import sys, site; print(site.getsitepackages()[0] if site.getsitepackages() else '')" 2>/dev/null || true)
     if [ -n "$site_pkg" ] && [ -f "$site_pkg/hermes_state.py" ]; then
@@ -55,16 +73,16 @@ HERMES_DIR="$(detect_hermes_dir)"
 
 if [ -z "$HERMES_DIR" ]; then
     echo -e "${RED}Error: Could not locate Hermes Agent installation directory.${NC}"
-    echo -e "Please specify manually with: HERMES_SOURCE_DIR=/path/to/hermes-agent bash install.sh"
+    echo -e "Please specify manually with: ${BOLD}HERMES_SOURCE_DIR=/path/to/hermes-agent bash install.sh${NC}"
     exit 1
 fi
 
 echo -e "${GREEN}✓ Found Hermes Agent at: ${BOLD}${HERMES_DIR}${NC}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "")"
 PATCH_SCRIPT="${SCRIPT_DIR}/hermes_patches.py"
 
-# If running directly from curl pipe, download hermes_patches.py to a temp directory
+# If running directly from curl pipe or standalone script missing, download to temp
 if [ ! -f "$PATCH_SCRIPT" ]; then
     TEMP_DIR=$(mktemp -d)
     trap 'rm -rf "$TEMP_DIR"' EXIT
@@ -72,31 +90,33 @@ if [ ! -f "$PATCH_SCRIPT" ]; then
     PATCH_SCRIPT="$TEMP_DIR/hermes_patches.py"
 fi
 
-# Check for --uninstall
-if [ "$1" == "--uninstall" ]; then
-    echo -e "${YELLOW}Restoring original backup files...${NC}"
-    find "$HERMES_DIR" -name "*.bak" | while read -r bak; do
-        orig="${bak%.bak}"
-        mv -f "$bak" "$orig"
-        echo "Restored $orig"
-    done
-    
-    if [ -f /etc/systemd/system/hermes-gateway.service.d/10-local-patches.conf ]; then
-        rm -f /etc/systemd/system/hermes-gateway.service.d/10-local-patches.conf
-        if command -v systemctl >/dev/null 2>&1; then
-            systemctl daemon-reload || true
+# Check for --uninstall / -u in any argument position
+for arg in "$@"; do
+    if [ "$arg" == "--uninstall" ] || [ "$arg" == "-u" ]; then
+        echo -e "${YELLOW}Restoring original backup files (*.bak)...${NC}"
+        find "$HERMES_DIR" -name "*.bak" | while read -r bak; do
+            orig="${bak%.bak}"
+            mv -f "$bak" "$orig"
+            echo "Restored $orig"
+        done
+        
+        if [ -f /etc/systemd/system/hermes-gateway.service.d/10-local-patches.conf ]; then
+            rm -f /etc/systemd/system/hermes-gateway.service.d/10-local-patches.conf
+            if command -v systemctl >/dev/null 2>&1; then
+                systemctl daemon-reload || true
+            fi
+            echo "Removed systemd patch hook."
         fi
-        echo "Removed systemd patch hook."
-    fi
 
-    if [ -f /root/.hermes/scripts/hermes-local-patches.py ]; then
-        rm -f /root/.hermes/scripts/hermes-local-patches.py
-        echo "Cleaned /root/.hermes/scripts/hermes-local-patches.py."
-    fi
+        if [ -f "$HOME/.hermes/scripts/hermes-local-patches.py" ]; then
+            rm -f "$HOME/.hermes/scripts/hermes-local-patches.py"
+            echo "Cleaned $HOME/.hermes/scripts/hermes-local-patches.py."
+        fi
 
-    echo -e "${GREEN}✓ Uninstallation complete.${NC}"
-    exit 0
-fi
+        echo -e "${GREEN}✓ Uninstallation and rollback complete.${NC}"
+        exit 0
+    fi
+done
 
 # Run patches with forwarded arguments
 echo -e "${BLUE}Applying enhancement patches...${NC}"
@@ -111,44 +131,26 @@ done
 
 # Setup systemd auto-healing hook if gateway service exists and systemctl is present
 if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files 2>/dev/null | grep -q "hermes-gateway.service"; then
-    echo -e "${BLUE}Configuring systemd auto-healing hook...${NC}"
-    mkdir -p /root/.hermes/scripts
-    cp -f "$PATCH_SCRIPT" /root/.hermes/scripts/hermes-local-patches.py
-    chmod +x /root/.hermes/scripts/hermes-local-patches.py
+    echo -e "${BLUE}Configuring systemd auto-healing hook (ExecStartPre)...${NC}"
+    mkdir -p "$HOME/.hermes/scripts"
+    cp -f "$PATCH_SCRIPT" "$HOME/.hermes/scripts/hermes-local-patches.py"
+    chmod +x "$HOME/.hermes/scripts/hermes-local-patches.py"
 
-    mkdir -p /etc/systemd/system/hermes-gateway.service.d
-    cat <<EOF > /etc/systemd/system/hermes-gateway.service.d/10-local-patches.conf
+    if [ -w "/etc/systemd/system" ] || [ "$EUID" -eq 0 ]; then
+        mkdir -p /etc/systemd/system/hermes-gateway.service.d
+        cat <<EOF > /etc/systemd/system/hermes-gateway.service.d/10-local-patches.conf
 [Service]
 Environment="HERMES_PATCH_SOURCE_ROOT=${HERMES_DIR}"
-ExecStartPre=/root/.hermes/scripts/hermes-local-patches.py
+ExecStartPre=$HOME/.hermes/scripts/hermes-local-patches.py
 EOF
-    systemctl daemon-reload || true
-    echo -e "${GREEN}✓ Auto-healing supervision hook configured (ExecStartPre).${NC}"
+        systemctl daemon-reload || true
+        echo -e "${GREEN}✓ Auto-healing supervision hook configured (/etc/systemd/system/hermes-gateway.service.d/10-local-patches.conf).${NC}"
+    else
+        echo -e "${YELLOW}Notice: No write permission to /etc/systemd/system. Skipped systemd hook setup (Run with sudo to enable).${NC}"
+    fi
 else
-    echo -e "${YELLOW}Notice: hermes-gateway.service not found in systemd. Skipped systemd hook setup (Container/CLI mode).${NC}"
+    echo -e "${YELLOW}Notice: hermes-gateway.service not registered in systemd. Skipped systemd hook setup (Container/CLI mode).${NC}"
 fi
 
-# Ensure runtime_footer is enabled in config.yaml
-CONFIG_PATH="$HOME/.hermes/config.yaml"
-if [ -f "$CONFIG_PATH" ]; then
-    echo -e "${BLUE}Ensuring runtime_footer fields enabled in config.yaml...${NC}"
-    "$PYTHON_BIN" -c '
-import yaml, os
-cfg_path = os.path.expanduser("~/.hermes/config.yaml")
-try:
-    with open(cfg_path, "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f) or {}
-    disp = cfg.setdefault("display", {})
-    rf = disp.setdefault("runtime_footer", {})
-    rf["enabled"] = True
-    rf["fields"] = ["model", "prompt_tokens", "cache_read", "output_tokens", "context_pct", "elapsed_time"]
-    with open(cfg_path, "w", encoding="utf-8") as f:
-        yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True)
-    print("✓ config.yaml runtime_footer updated")
-except Exception as e:
-    print(f"Notice: config.yaml check skipped ({e})")
-' 2>/dev/null || true
-fi
-
-echo -e "\n${BOLD}${GREEN}🎉 Hermes Patches installed successfully!${NC}"
-echo -e "Restart your gateway via Telegram (${BOLD}/restart${NC}) to take effect.\n"
+echo -e "\n${BOLD}${GREEN}🎉 Hermes Patches applied successfully!${NC}"
+echo -e "Restart your gateway via Telegram (${BOLD}/restart${NC}) or systemctl to take effect.\n"

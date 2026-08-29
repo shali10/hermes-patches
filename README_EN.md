@@ -17,10 +17,11 @@
   <a href="https://github.com/shali10/hermes-patches/pulls"><img src="https://img.shields.io/badge/PRs-welcome-green.svg" alt="PRs Welcome" /></a>
 </p>
 
-> 🧭 **Quick Navigation**: [✨ Features Comparison](#-features--comparison) · [🔍 Showcase](#-showcase) · [🚀 Quick Install](#-quick-start-installation) · [📦 Patch Registry](#-patch-registry) · [📝 Changelog](#-changelog) · [↩️ Rollback](#️-rollback--uninstall)
+> 🧭 **Quick Navigation**: [✨ Features](#features) · [🔍 Showcase](#showcase) · [🚀 Installation](#installation) · [📦 Patches](#patches) · [📝 Changelog](#changelog) · [↩️ Uninstall](#uninstall)
 
 ---
 
+<a id="features"></a>
 ## ✨ Features & Comparison
 
 | Module | Upstream Vanilla | With hermes-patches ✨ |
@@ -37,6 +38,7 @@
 
 ---
 
+<a id="showcase"></a>
 ## 🔍 Showcase
 
 ### 1. 📊 Full Runtime Footer Telemetry
@@ -77,6 +79,7 @@ For DeepSeek-R1, QwQ, Claude 3.7 Thinking, or Gemini Thinking models:
 
 ---
 
+<a id="architecture"></a>
 ## 🏗️ Architecture & How It Works
 
 `hermes-patches` uses **safe code injection validated by Python's bytecode compiler** coupled with **systemd startup supervision**:
@@ -106,6 +109,7 @@ For DeepSeek-R1, QwQ, Claude 3.7 Thinking, or Gemini Thinking models:
 
 ---
 
+<a id="safety"></a>
 ## 🛡️ Production Safety Design
 
 1. **🔬 Atomic Compilation Verification**: All transformations are performed in isolated temporary files and checked via Python's native `py_compile.compile(..., doraise=True)`. The target file is replaced atomically (`os.replace`) ONLY when syntax passes.
@@ -114,6 +118,7 @@ For DeepSeek-R1, QwQ, Claude 3.7 Thinking, or Gemini Thinking models:
 
 ---
 
+<a id="installation"></a>
 ## 🚀 Quick Start (Installation)
 
 ### 1. Standard One-Line Install
@@ -149,6 +154,7 @@ python3 hermes_patches.py --skip menu
 
 ---
 
+<a id="patches"></a>
 ## 📦 Patch Registry
 
 | Patch ID | Aliases | Target Files | Description |
@@ -164,6 +170,7 @@ python3 hermes_patches.py --skip menu
 
 ---
 
+<a id="changelog"></a>
 ## 📝 Changelog
 
 | Version | Release Date | Key Updates | Link |
@@ -176,6 +183,7 @@ python3 hermes_patches.py --skip menu
 
 ---
 
+<a id="uninstall"></a>
 ## ↩️ Rollback & Uninstall
 
 To cleanly revert all modifications:
@@ -186,6 +194,7 @@ bash install.sh --uninstall
 
 ---
 
+<a id="contributing"></a>
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
