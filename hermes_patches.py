@@ -560,13 +560,13 @@ def format_runtime_footer('''
                 ins_idx = cand.find('inserted, tool_calls_total = self._insert_message_rows(', b_start)
                 if ins_idx > b_start:
                     heal_batch = '''# FK batch self-heal: ensure session exists
-            try:
-                conn.execute(
-                    \"INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)\",
-                    (session_id, time.time()),
-                )
-            except Exception:
-                pass\n\n            '''
+                try:
+                    conn.execute(
+                        \"INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)\",
+                        (session_id, time.time()),
+                    )
+                except Exception:
+                    pass\n\n                '''
                     cand = cand[:ins_idx] + heal_batch + cand[ins_idx:]
 
             return cand
