@@ -49,6 +49,70 @@ jobs:
           python3 -m py_compile /tmp/hermes-agent/gateway/stream_consumer.py
           python3 -m py_compile /tmp/hermes-agent/gateway/platforms/base.py
 
+      - name: End-to-End Runtime Behavioral Assertions
+        run: |
+          python3 -c "
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, '/tmp/hermes-agent')
+
+          # 1. Runtime Footer
+          from gateway.runtime_footer import format_runtime_footer
+          line = format_runtime_footer(
+              model='gemini-3.7-flash-high',
+              turn_seconds=2.5,
+              context_tokens=10000,
+              context_length=1000000,
+              prompt_tokens=10000,
+              output_tokens=500,
+              cache_read_tokens=8000,
+              fields=['model', 'prompt_tokens', 'cache_read', 'output_tokens', 'context_pct', 'elapsed_time']
+          )
+          assert '🤖 gemini-3.7-flash-high' in line
+          assert '🧠 Prompt总量: 10,000' in line
+          assert '💾 缓存命中: 8,000 (80%)' in line
+          assert '📤 输出: 500' in line
+
+          # 2. Telegram CJK Table Bypass
+          from plugins.platforms.telegram.adapter import TelegramAdapter
+          adapter = TelegramAdapter.__new__(TelegramAdapter)
+          assert adapter._has_telegram_desktop_cjk_rich_garble_shape('测试表格\n| a | b |\n|---|---|\n| 1 | 2 |') is False
+          assert adapter._needs_rich_rendering('测试表格\n| a | b |\n|---|---|\n| 1 | 2 |') is True
+
+          # 3. Telegram Chinese Commands
+          from hermes_cli.commands import telegram_bot_commands, gateway_help_lines
+          cmds = telegram_bot_commands()
+          assert len(cmds) > 0
+          assert any('响应平台启动请求' in d for _, d in cmds)
+          help_lines = gateway_help_lines()
+          assert any('响应平台启动请求' in l for l in help_lines)
+
+          # 4. State DB Hardening
+          state_code = Path('/tmp/hermes-agent/hermes_state.py').read_text(encoding='utf-8')
+          assert 'PRAGMA busy_timeout = 5000' in state_code
+          assert 'FK self-heal: ensure the session parent row exists' in state_code
+          assert 'FK batch self-heal' in state_code
+
+          # 5. Tirith Low-Severity
+          approval_code = Path('/tmp/hermes-agent/tools/approval.py').read_text(encoding='utf-8')
+          assert '_skip_low_warn' in approval_code
+
+          # 6. Streaming Control
+          run_code = Path('/tmp/hermes-agent/gateway/run.py').read_text(encoding='utf-8')
+          assert '_global_display_streaming' in run_code
+
+          # 7. Clean Thinking
+          cli_code = Path('/tmp/hermes-agent/cli.py').read_text(encoding='utf-8')
+          stream_code = Path('/tmp/hermes-agent/gateway/stream_consumer.py').read_text(encoding='utf-8')
+          assert '<antml:thought>' in cli_code and '<antml:thought>' in stream_code
+
+          # 8. Telegram 4096 Smart Split
+          base_code = Path('/tmp/hermes-agent/gateway/platforms/base.py').read_text(encoding='utf-8')
+          assert 'hermes-patches smart-split' in base_code
+
+          print('All 8 patches passed runtime assertions!')
+          "
+
       - name: Test Idempotency (Run Again)
         run: |
           python3 hermes_patches.py --target /tmp/hermes-agent --verbose

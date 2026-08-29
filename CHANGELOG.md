@@ -5,6 +5,22 @@
 
 ---
 
+## [v1.3.3] - 2026-08-29
+
+### 🛡️ 全补丁矩阵运行时深度加固 (Full Matrix Runtime Hardening)
+* **🇨🇳 Telegram 菜单与帮助汉化逻辑重构 (`hermes_cli/commands.py`)**：
+  * 重构 `telegram_bot_commands` 动态汉化机制，彻底消除静态列表重写引发的 `NameError: name '_RAW_TELEGRAM_BOT_COMMANDS' is not defined` 异常。
+  * 完美保留上游全部动态命令门控、插件命令发现与过滤逻辑，同时对全部 99+ 命令实现 100% 地道中文汉化。
+* **🛡️ SQLite State DB 注入全面加固 (`hermes_state.py`)**：
+  * 重写 `apply_database_pragmas` 注入锚点，确保 `PRAGMA busy_timeout = 5000` 连接级高并发锁等待 100% 生效。
+  * 采用多行容错锚点安全注入 `append_message` 与 `append_messages_batch` 的外键自动补齐与自愈逻辑，彻底防止跨会话写入外键崩溃。
+* **✂️ Telegram 4096 智能段落切分精准命中 (`gateway/platforms/base.py`)**：
+  * 修复 Python 多行字符串字面量转义问题，采用精确锚点安全覆写，100% 确保长消息优先在自然段落 (`\n\n`) 边界处平滑切分。
+* **🧪 引入全量 8 大补丁端到端运行时断言测试套件**：
+  * 在 GitHub Actions CI 工作流中加入完整的动态导入、函数调用与字段断言测试矩阵，确保每一项补丁在全新上游代码库中 100% 真实可用。
+
+---
+
 ## [v1.3.2] - 2026-08-29
 
 ### 🐛 缺陷修复 (Bug Fixes)

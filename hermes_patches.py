@@ -491,19 +491,15 @@ def format_runtime_footer('''
                 cand = cand.replace(old_ghl, new_ghl, 1)
 
             # 3. Update telegram_bot_commands
-            old_tbc = "def telegram_bot_commands() -> list[tuple[str, str]]:"
-            if old_tbc in cand and "_RAW_TELEGRAM_BOT_COMMANDS" not in cand:
-                start = cand.find(old_tbc)
-                end = cand.find("\n\n# Telegram allows up to 100 BotCommands.", start)
-                if start > 0 and end > 0:
-                    tbc_block = """def telegram_bot_commands() -> list[tuple[str, str]]:
-    \"\"\"Return command list with localized descriptions.\"\"\"
-    cmds = []
-    for cmd, desc in _RAW_TELEGRAM_BOT_COMMANDS:
-        cmds.append((cmd, _TELEGRAM_ZH_DESCRIPTIONS.get(cmd, desc)))
-    return cmds"""
-                    cand = cand.replace(old_tbc, "_RAW_TELEGRAM_BOT_COMMANDS: list[tuple[str, str]] = [", 1)
-                    cand = cand[:start] + tbc_block + cand[end:]
+            old_tg_append = '            result.append((tg_name, cmd.description))'
+            new_tg_append = '            result.append((tg_name, _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, cmd.description)))'
+            if old_tg_append in cand:
+                cand = cand.replace(old_tg_append, new_tg_append, 1)
+
+            old_plugin_append = '            result.append((tg_name, description))'
+            new_plugin_append = '            result.append((tg_name, _TELEGRAM_ZH_DESCRIPTIONS.get(name, description)))'
+            if old_plugin_append in cand:
+                cand = cand.replace(old_plugin_append, new_plugin_append, 1)
 
             return cand
 
@@ -516,21 +512,47 @@ def format_runtime_footer('''
         def transform(src: str) -> str:
             cand = src
 
-            # 1. State DB contention busy_timeout
-            old_pragmas = '    conn.execute("PRAGMA synchronous = NORMAL")'
-            new_pragmas = '    conn.execute("PRAGMA busy_timeout = 5000")\n    conn.execute("PRAGMA synchronous = NORMAL")'
-            if "PRAGMA busy_timeout = 5000" not in cand and old_pragmas in cand:
-                cand = cand.replace(old_pragmas, new_pragmas, 1)
+            # 1. State DB contention busy_timeout in apply_database_pragmas
+            if "PRAGMA busy_timeout = 5000" not in cand:
+                pragma_anchor = "def apply_database_pragmas("
+                if pragma_anchor in cand:
+                    p_start = cand.find(pragma_anchor)
+                    doc_end = cand.find('\"\"\"\n    try:', p_start)
+                    if doc_end > p_start:
+                        bt_code = '''\"\"\"\n    try:\n        conn.execute(\"PRAGMA busy_timeout = 5000\")\n    except Exception:\n        pass\n\n    try:'''
+                        cand = cand[:doc_end] + bt_code + cand[doc_end + len('\"\"\"\n    try:'):]
 
-            # 2. FK self-heal on append_message
-            pat1 = r'(\s+self\._check_transcript_write_guards\([^)]+\)\n)(\s+cursor\s*=\\s*conn\.execute\(\s*"""INSERT INTO messages)'
-            heal1 = '\n            # FK self-heal: ensure the session parent row exists.\n            conn.execute(\n                "INSERT OR IGNORE INTO sessions (id, source, started_at) "\n                "VALUES (?, \'unknown\', ?)",\n                (session_id, time.time()),\n            )\n'
-            cand, _ = re.subn(pat1, r'\1' + heal1 + r'\2', cand, count=1)
+            # 2. FK self-heal in append_message
+            msg_anchor = "def append_message("
+            if msg_anchor in cand and "FK self-heal: ensure the session parent row exists" not in cand:
+                m_start = cand.find(msg_anchor)
+                ins_idx = cand.find('cursor = conn.execute(\n                \"\"\"INSERT INTO messages', m_start)
+                if ins_idx > m_start:
+                    heal_code = '''# FK self-heal: ensure the session parent row exists.
+            try:
+                conn.execute(
+                    \"INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)\",
+                    (session_id, time.time()),
+                )
+            except Exception:
+                pass\n\n            '''
+                    cand = cand[:ins_idx] + heal_code + cand[ins_idx:]
 
-            # 3. FK self-heal on append_messages_batch
-            pat2 = r'(\s+self\._check_transcript_write_guards\([^)]+\)\n)(\s+inserted,\s*tool_calls_total\s*=\s*self\._insert_message_rows\()'
-            heal2 = '\n            # FK self-heal: ensure the session parent row exists.\n            conn.execute(\n                "INSERT OR IGNORE INTO sessions (id, source, started_at) "\n                "VALUES (?, \'unknown\', ?)",\n                (session_id, time.time()),\n            )\n'
-            cand, _ = re.subn(pat2, r'\1' + heal2 + r'\2', cand, count=1)
+            # 3. FK self-heal in append_messages_batch
+            batch_anchor = "def append_messages_batch("
+            if batch_anchor in cand and "FK batch self-heal" not in cand:
+                b_start = cand.find(batch_anchor)
+                ins_idx = cand.find('inserted, tool_calls_total = self._insert_message_rows(', b_start)
+                if ins_idx > b_start:
+                    heal_batch = '''# FK batch self-heal: ensure session exists
+            try:
+                conn.execute(
+                    \"INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)\",
+                    (session_id, time.time()),
+                )
+            except Exception:
+                pass\n\n            '''
+                    cand = cand[:ins_idx] + heal_batch + cand[ins_idx:]
 
             return cand
 
@@ -675,24 +697,17 @@ def format_runtime_footer('''
     def patch_smart_split(self) -> bool:
         def transform_base_platform(src: str) -> str:
             cand = src
-            if "# Prefer paragraph break (\\n\\n)" in cand:
+            if "hermes-patches smart-split" in cand:
                 return cand
 
-            old_split = '''            region = remaining[:_cp_limit]
-            split_at = region.rfind("\\n")
-            if split_at < _cp_limit // 2:
-                split_at = region.rfind(" ")'''
-
-            new_split = '''            region = remaining[:_cp_limit]
-            # Prefer paragraph break (\\n\\n), then single newline (\\n), then space (hermes-patches smart-split)
-            split_at = region.rfind("\\n\\n")
-            if split_at < _cp_limit // 3:
-                split_at = region.rfind("\\n")
-            if split_at < _cp_limit // 2:
-                split_at = region.rfind(" ")'''
-
-            if old_split in cand:
-                cand = cand.replace(old_split, new_split, 1)
+            anchor = "region = remaining[:_cp_limit]\n            split_at = region.rfind("
+            if anchor in cand:
+                start_idx = cand.find(anchor)
+                target_end = cand.find('split_at = region.rfind(" ")', start_idx)
+                if start_idx >= 0 and target_end > start_idx:
+                    end_idx = target_end + len('split_at = region.rfind(" ")')
+                    new_code = 'region = remaining[:_cp_limit]\n            # Prefer paragraph break, then single newline, then space (hermes-patches smart-split)\n            split_at = region.rfind("\\n\\n")\n            if split_at < _cp_limit // 3:\n                split_at = region.rfind("\\n")\n            if split_at < _cp_limit // 2:\n                split_at = region.rfind(" ")'
+                    cand = cand[:start_idx] + new_code + cand[end_idx:]
             return cand
 
         return self.apply_file_patch("gateway/platforms/base.py", transform_base_platform, "✂️ Telegram 4096 智能段落切分")
