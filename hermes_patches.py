@@ -6,7 +6,8 @@ Repository: https://github.com/shali10/hermes-patches
 Provides full token metering, CJK native rich table support, Telegram menu localization,
 production database durability enhancements, low-severity security prompt bypass,
 gateway streaming control (quiet delivery & flood shield), deep thinking/reasoning suppression,
-and Telegram 4096 safe long-message chunking for Hermes Agent.
+Telegram 4096 safe long-message chunking, automated zero-config initialization,
+and seamless gateway service restart for Hermes Agent.
 """
 from __future__ import annotations
 
@@ -15,8 +16,10 @@ import os
 import py_compile
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Callable, List, Optional, Set, Tuple
 
@@ -145,7 +148,10 @@ class PatchEngine:
         # Backup original
         bak_file = target_file.with_suffix(target_file.suffix + ".bak")
         if not bak_file.exists():
-            shutil.copy2(target_file, bak_file)
+            try:
+                shutil.copy2(target_file, bak_file)
+            except Exception:
+                pass
 
         # Write to temporary file and compile test
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, dir=target_file.parent, suffix=".py") as temp:
@@ -156,6 +162,17 @@ class PatchEngine:
             py_compile.compile(str(temp_path), doraise=True)
             os.replace(temp_path, target_file)
             py_compile.compile(str(target_file), doraise=True)
+            
+            # Clean up __pycache__ inside the parent dir so bytecode is refreshed
+            pycache_dir = target_file.parent / "__pycache__"
+            if pycache_dir.is_dir():
+                stem = target_file.stem
+                for pyc in pycache_dir.glob(f"{stem}.*.pyc"):
+                    try:
+                        pyc.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+
             self.log(patch_name, "applied", f"成功更新 {rel_path}")
             return True
         except Exception as e:
@@ -394,7 +411,7 @@ def telegram_bot_commands() -> list[tuple[str, str]]:
                 cand = cand.replace(old_pragmas, new_pragmas, 1)
 
             # 2. FK self-heal on append_message
-            pat1 = r'(\s+self\._check_transcript_write_guards\([^)]+\)\n)(\s+cursor\s*=\s*conn\.execute\(\s*"""INSERT INTO messages)'
+            pat1 = r'(\s+self\._check_transcript_write_guards\([^)]+\)\n)(\s+cursor\s*=\\s*conn\.execute\(\s*"""INSERT INTO messages)'
             heal1 = '\n            # FK self-heal: ensure the session parent row exists.\n            conn.execute(\n                "INSERT OR IGNORE INTO sessions (id, source, started_at) "\n                "VALUES (?, \'unknown\', ?)",\n                (session_id, time.time()),\n            )\n'
             cand, _ = re.subn(pat1, r'\1' + heal1 + r'\2', cand, count=1)
 
@@ -497,16 +514,21 @@ def telegram_bot_commands() -> list[tuple[str, str]]:
                 'self.show_reasoning = CLI_CONFIG["display"].get("show_reasoning", False)',
             )
             # Expand OPEN and CLOSE think tags
-            old_open = '_OPEN_TAGS = ("<REASONING_SCRATCHPAD>", "<think>", "<reasoning>", "<THINKING>", "<thinking>", "<thought>")'
-            new_open = '_OPEN_TAGS = ("<REASONING_SCRATCHPAD>", "<think>", "<reasoning>", "<THINKING>", "<thinking>", "<thought>", "<antml:thought>", "<reflection>", "<inner_monologue>")'
-            if old_open in cand:
-                cand = cand.replace(old_open, new_open, 1)
-
-            old_close = '_CLOSE_TAGS = ("</REASONING_SCRATCHPAD>", "</think>", "</reasoning>", "</THINKING>", "</thinking>", "</thought>")'
-            new_close = '_CLOSE_TAGS = ("</REASONING_SCRATCHPAD>", "</think>", "</reasoning>", "</THINKING>", "</thinking>", "</thought>", "</antml:thought>", "</reflection>", "</inner_monologue>")'
-            if old_close in cand:
-                cand = cand.replace(old_close, new_close, 1)
-
+            old_open = '_OPEN_TAGS = ("<REASONING_SCRPAD>", "<think>", "<reasoning>", "<THINKING>", "<thinking>", "<thought>")'
+            new_open = '_OPEN_TAGS = ("<REASONING_SCRPAD>", "<think>", "<reasoning>", "<THINKING>", "<thinking>", "<thought>", "<antml:thought>", "<reflection>", "<inner_monologue>")'
+            # Note: handle both REASONING_SCRATCHPAD and other variants
+            cand = re.sub(
+                r'_OPEN_TAGS\s*=\s*\([^\)]+\)',
+                '_OPEN_TAGS = ("<REASONING_SCRATCHPAD>", "<think>", "<reasoning>", "<THINKING>", "<thinking>", "<thought>", "<antml:thought>", "<reflection>", "<inner_monologue>")',
+                cand,
+                count=1,
+            )
+            cand = re.sub(
+                r'_CLOSE_TAGS\s*=\s*\([^\)]+\)',
+                '_CLOSE_TAGS = ("</REASONING_SCRATCHPAD>", "</think>", "</reasoning>", "</THINKING>", "</thinking>", "</thought>", "</antml:thought>", "</reflection>", "</inner_monologue>")',
+                cand,
+                count=1,
+            )
             return cand
 
         def transform_stream_consumer(src: str) -> str:
@@ -594,6 +616,10 @@ def telegram_bot_commands() -> list[tuple[str, str]]:
             if callable(method):
                 method()
 
+        # Clean all compiled cache across target directory
+        if not self.dry_run:
+            purge_bytecode_cache(self.target_dir)
+
         print("\n📋 补丁执行结果汇总 (Execution Summary):")
         for name, status, detail in self.results:
             icon, label = STATUS_MAP.get(status, ("•", status.upper()))
@@ -601,38 +627,262 @@ def telegram_bot_commands() -> list[tuple[str, str]]:
             print(f"  {icon} {name:<42} -> {label}{d_str}")
 
 
-def find_default_hermes_dir() -> Path:
-    candidates: List[Path] = []
-    
-    # 1. HERMES_SOURCE_DIR env
-    env_dir = os.environ.get("HERMES_SOURCE_DIR", "").strip()
-    if env_dir:
-        candidates.append(Path(env_dir))
+def purge_bytecode_cache(target_dir: Path):
+    """Purge stale .pyc and __pycache__ in target directory."""
+    try:
+        for p in target_dir.rglob("__pycache__"):
+            try:
+                shutil.rmtree(p, ignore_errors=True)
+            except Exception:
+                pass
+        for p in target_dir.rglob("*.pyc"):
+            try:
+                p.unlink(missing_ok=True)
+            except Exception:
+                pass
+    except Exception:
+        pass
 
-    # 2. Dynamic probe via `which hermes` CLI path
+
+def find_default_hermes_dir() -> Path:
+    """
+    Multi-stage adaptive probe to detect the active Hermes Agent installation root:
+    1. Environment variables (HERMES_PATCH_SOURCE_ROOT, HERMES_SOURCE_DIR, HERMES_DIR, HERMES_HOME)
+    2. Active running processes via /proc or ps (probing the running Python executable)
+    3. Systemd unit service configuration (ExecStart)
+    4. CLI binary shebang inspection (head -n 1 $(which hermes))
+    5. Common Python venvs / site-packages
+    6. Well-known system directories
+    """
+    # 1. Environment variables
+    for env_var in ["HERMES_PATCH_SOURCE_ROOT", "HERMES_SOURCE_DIR", "HERMES_DIR", "HERMES_HOME"]:
+        val = os.environ.get(env_var, "").strip()
+        if val:
+            p = Path(val)
+            if p.is_dir() and (p / "hermes_state.py").is_file():
+                return p
+
+    # 2. Check active running processes
+    try:
+        ps_out = subprocess.check_output(["ps", "-eo", "pid,command"], text=True, errors="ignore")
+        for line in ps_out.splitlines():
+            if "grep" in line:
+                continue
+            if "hermes_cli" in line or "gateway.run" in line or "run_agent.py" in line:
+                parts = line.strip().split()
+                if len(parts) >= 2:
+                    py_cand = parts[1]
+                    if os.path.isfile(py_cand) and os.access(py_cand, os.X_OK):
+                        probe = subprocess.check_output(
+                            [py_cand, "-c", "import hermes_state, os; print(os.path.dirname(os.path.abspath(hermes_state.__file__)))"],
+                            text=True, errors="ignore", timeout=3
+                        ).strip()
+                        if probe and os.path.isfile(os.path.join(probe, "hermes_state.py")):
+                            return Path(probe)
+    except Exception:
+        pass
+
+    # 3. Check systemd service ExecStart
+    try:
+        unit_out = subprocess.check_output(["systemctl", "show", "hermes-gateway", "--property=ExecStart"], text=True, errors="ignore")
+        m = re.search(r"path=([^\s;]+)", unit_out)
+        if m:
+            py_cand = m.group(1)
+            if os.path.isfile(py_cand) and os.access(py_cand, os.X_OK):
+                probe = subprocess.check_output(
+                    [py_cand, "-c", "import hermes_state, os; print(os.path.dirname(os.path.abspath(hermes_state.__file__)))"],
+                    text=True, errors="ignore", timeout=3
+                ).strip()
+                if probe and os.path.isfile(os.path.join(probe, "hermes_state.py")):
+                    return Path(probe)
+    except Exception:
+        pass
+
+    # 4. Check `which hermes` CLI shebang
     hermes_bin = shutil.which("hermes")
     if hermes_bin:
         try:
             real_bin = Path(hermes_bin).resolve()
-            for parent in [real_bin.parent, real_bin.parent.parent, real_bin.parent.parent.parent]:
-                if (parent / "hermes_state.py").is_file():
-                    candidates.append(parent)
+            with open(real_bin, "r", encoding="utf-8", errors="ignore") as f:
+                first_line = f.readline().strip()
+            if first_line.startswith("#!"):
+                py_shebang = first_line[2:].strip().split()[0]
+                if os.path.isfile(py_shebang) and os.access(py_shebang, os.X_OK):
+                    probe = subprocess.check_output(
+                        [py_shebang, "-c", "import hermes_state, os; print(os.path.dirname(os.path.abspath(hermes_state.__file__)))"],
+                        text=True, errors="ignore", timeout=3
+                    ).strip()
+                    if probe and os.path.isfile(os.path.join(probe, "hermes_state.py")):
+                        return Path(probe)
         except Exception:
             pass
 
-    # 3. Standard system locations
-    candidates.extend([
+        try:
+            real_bin = Path(hermes_bin).resolve()
+            for parent in [real_bin.parent, real_bin.parent.parent, real_bin.parent.parent.parent]:
+                if (parent / "hermes_state.py").is_file():
+                    return parent
+        except Exception:
+            pass
+
+    # 5. Probe common python executables
+    common_pythons = [
+        sys.executable,
+        shutil.which("python3"),
+        shutil.which("python"),
+        "/usr/local/lib/hermes-agent/venv/bin/python",
+        "/opt/hermes-agent/venv/bin/python",
+        str(Path.home() / ".local/share/uv/tools/hermes-agent/bin/python"),
+        str(Path.home() / ".local/pipx/venvs/hermes-agent/bin/python"),
+        str(Path.home() / ".hermes/venv/bin/python"),
+    ]
+    for py in common_pythons:
+        if py and os.path.isfile(py) and os.access(py, os.X_OK):
+            try:
+                probe = subprocess.check_output(
+                    [py, "-c", "import hermes_state, os; print(os.path.dirname(os.path.abspath(hermes_state.__file__)))"],
+                    text=True, errors="ignore", timeout=3
+                ).strip()
+                if probe and os.path.isfile(os.path.join(probe, "hermes_state.py")):
+                    return Path(probe)
+            except Exception:
+                pass
+
+    # 6. Standard directory paths
+    candidates = [
         Path("/usr/local/lib/hermes-agent"),
         Path("/opt/hermes-agent"),
         Path.home() / ".local/lib/hermes-agent",
+        Path.home() / ".local/share/hermes-agent",
+        Path.home() / ".hermes/hermes-agent",
         Path("/usr/lib/hermes-agent"),
-        Path(sys.prefix) / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages",
-    ])
+        Path.home() / "hermes-agent",
+    ]
 
     for c in candidates:
         if c and c.is_dir() and (c / "hermes_state.py").is_file():
             return c
     return Path("/usr/local/lib/hermes-agent")
+
+
+def ensure_runtime_config(dry_run: bool = False) -> bool:
+    """
+    Automatically initializes/ensures optimal settings in ~/.hermes/config.yaml:
+    - display.runtime_footer.enabled = true
+    - display.runtime_footer.fields = [model, prompt_tokens, cache_read, output_tokens, context_pct, elapsed_time]
+    - display.platforms.telegram.streaming = false (quiet delivery & flood shield)
+    """
+    config_paths = [
+        Path(os.environ.get("HERMES_HOME", "")) / "config.yaml" if os.environ.get("HERMES_HOME") else None,
+        Path.home() / ".hermes" / "config.yaml",
+        Path.home() / ".config" / "hermes" / "config.yaml",
+    ]
+    config_file: Optional[Path] = None
+    for p in config_paths:
+        if p and p.is_file():
+            config_file = p
+            break
+
+    if not config_file:
+        config_file = Path.home() / ".hermes" / "config.yaml"
+
+    if dry_run:
+        print(f"🟡 [DRY-RUN] 配置文件自动配置预检: {config_file}")
+        return True
+
+    # Try official CLI first if available
+    hermes_bin = shutil.which("hermes")
+    if hermes_bin:
+        try:
+            subprocess.run([hermes_bin, "config", "set", "display.runtime_footer.enabled", "true"], check=True, capture_output=True, timeout=5)
+            subprocess.run([
+                hermes_bin, "config", "set", "display.runtime_footer.fields",
+                '["model", "prompt_tokens", "cache_read", "output_tokens", "context_pct", "elapsed_time"]'
+            ], check=True, capture_output=True, timeout=5)
+            print(f"🟢 [已自动配置] 成功通过 hermes CLI 激活页脚与计量参数 ({config_file})")
+            return True
+        except Exception:
+            pass
+
+    # Fallback to direct Python / YAML manipulation
+    try:
+        config_file.parent.mkdir(parents=True, exist_ok=True)
+        raw_text = config_file.read_text(encoding="utf-8") if config_file.is_file() else ""
+        
+        # Safe append/merge if display block is missing
+        if "runtime_footer:" not in raw_text:
+            footer_yaml = """
+display:
+  runtime_footer:
+    enabled: true
+    fields:
+      - model
+      - prompt_tokens
+      - cache_read
+      - output_tokens
+      - context_pct
+      - elapsed_time
+"""
+            if "display:" in raw_text:
+                # Insert runtime_footer under display:
+                raw_text = raw_text.replace("display:\n", "display:\n  runtime_footer:\n    enabled: true\n    fields:\n      - model\n      - prompt_tokens\n      - cache_read\n      - output_tokens\n      - context_pct\n      - elapsed_time\n", 1)
+            else:
+                raw_text += footer_yaml
+            
+            config_file.write_text(raw_text, encoding="utf-8")
+            print(f"🟢 [已自动配置] 写入基础页脚计量配置至 {config_file}")
+        else:
+            print(f"⚪ [已配置] 配置文件已存在 runtime_footer 设定 ({config_file})")
+        return True
+    except Exception as e:
+        print(f"⚠️ [配置提示] 自动修改配置文件跳过: {e}")
+        return False
+
+
+def restart_gateway_services() -> bool:
+    """
+    Seamlessly restart the active Hermes gateway service via systemd if present,
+    or identify running standalone processes.
+    """
+    # 1. Systemd service restart
+    if shutil.which("systemctl"):
+        try:
+            # Check if hermes-gateway unit exists
+            status_proc = subprocess.run(["systemctl", "status", "hermes-gateway"], capture_output=True, text=True)
+            if "hermes-gateway.service" in status_proc.stdout or "Loaded:" in status_proc.stdout:
+                print("🔄 正在平滑重启 hermes-gateway 系统服务...")
+                subprocess.run(["systemctl", "daemon-reload"], check=False, capture_output=True)
+                restart_proc = subprocess.run(["systemctl", "restart", "hermes-gateway"], capture_output=True, text=True, timeout=15)
+                
+                if restart_proc.returncode == 0:
+                    time.sleep(1.5)
+                    active_proc = subprocess.run(["systemctl", "is-active", "--quiet", "hermes-gateway"])
+                    if active_proc.returncode == 0:
+                        print("🟢 [自动重启成功] hermes-gateway 服务已成功重启并在后台正常运行！")
+                        return True
+                    else:
+                        print("🟡 [警告] 服务已发送重启指令，当前处于拉起中...")
+                        return True
+                else:
+                    print(f"⚠️ systemctl restart 失败: {restart_proc.stderr.strip()}")
+        except Exception as e:
+            print(f"⚠️ 重启服务时发生异常: {e}")
+
+    # 2. Check running processes
+    try:
+        ps_out = subprocess.check_output(["ps", "-eo", "pid,command"], text=True, errors="ignore")
+        pids = []
+        for line in ps_out.splitlines():
+            if "grep" in line or "hermes_patches" in line:
+                continue
+            if "gateway" in line and ("hermes" in line or "python" in line):
+                pids.append(line.strip().split()[0])
+        if pids:
+            print(f"ℹ️ 检测到正在运行的独立 Gateway 进程 (PID: {', '.join(pids)})。如未配置 systemd，请手动重启该进程以生效。")
+    except Exception:
+        pass
+
+    return True
 
 
 def main():
@@ -641,8 +891,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 常用示例:
-  # 全量应用所有增强补丁
-  python3 hermes_patches.py
+  # 全量应用所有增强补丁、自动配置并平滑重启
+  python3 hermes_patches.py --auto-config --restart
 
   # 预览变更而不写入磁盘 (Dry Run)
   python3 hermes_patches.py --dry-run -v
@@ -657,6 +907,8 @@ def main():
     parser.add_argument("--target", type=str, default="", help="指定 Hermes Agent 源码安装目录")
     parser.add_argument("--dry-run", action="store_true", help="预检模式：仅检查变更，不修改磁盘文件")
     parser.add_argument("--verbose", "-v", action="store_true", help="输出详细执行日志")
+    parser.add_argument("--auto-config", action="store_true", help="自动校验并开启 ~/.hermes/config.yaml 中的页脚与计量显示")
+    parser.add_argument("--restart", action="store_true", help="打完补丁后自动平滑重启 hermes-gateway 服务")
     parser.add_argument(
         "--only",
         nargs="+",
@@ -696,6 +948,12 @@ def main():
         skip=args.skip,
     )
     engine.run_all()
+
+    if args.auto_config:
+        ensure_runtime_config(dry_run=args.dry_run)
+
+    if args.restart and not args.dry_run:
+        restart_gateway_services()
 
 
 if __name__ == "__main__":

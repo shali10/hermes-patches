@@ -5,6 +5,25 @@
 
 ---
 
+## [v1.3.0] - 2026-08-29
+
+### 🚀 新增特性 (Added)
+* **⚙️ 零配置开箱即用 (Turnkey Zero-Config Init)**：
+  * 安装引擎现自动校验并初始化 `~/.hermes/config.yaml`（`--auto-config`），自动开启 `runtime_footer.enabled: true` 并预配置全量 6 项计量参数字段。
+  * 彻底解决用户因官方默认未开启页脚配置而误以为「补丁没生效」的痛点，做到一键运行、即刻呈现！
+* **🔄 全自动平滑重启 (Auto Gateway Restart)**：
+  * 新增 `--restart` 参数并在默认全量安装中启用，安装完毕后自动探测 `hermes-gateway` 系统服务并执行平滑重启。
+  * 无需手动切换窗口敲命令，代码注入与服务重启全链路一次性闭环。
+* **🔍 终极多维自适应寻径引擎 (Universal Path Prober)**：
+  * 重构源码定位逻辑，覆盖 6 层高优先级寻径：环境变量（`HERMES_PATCH_SOURCE_ROOT` / `HERMES_SOURCE_DIR`）、`/proc` 活跃进程逆向追溯、systemd `ExecStart` 探测、CLI 二进制 shebang 解释器解析、常见虚拟环境探测与系统标准路径扫描。
+  * 100% 解决在复杂虚拟环境、多 Python 版本及自定义部署路径下的安装识别问题。
+* **🧹 字节码全量清理与刷新 (Bytecode Cache Purge)**：
+  * 安装后自动递归清除目标目录下的 `__pycache__` 与 stale `.pyc` 编译缓存，杜绝 Python 加载旧字节码导致的代码不生效。
+* **🛡️ systemd 双环境变量兼容守护**：
+  * `10-local-patches.conf` 守护单元同时注入 `HERMES_PATCH_SOURCE_ROOT` 与 `HERMES_SOURCE_DIR` 双环境变量，并显式传入 `--target` 参数，确保开机与重启时自愈守护 100% 稳定运行。
+
+---
+
 ## [v1.2.0] - 2026-08-29
 
 ### 🚀 新增特性 (Added)

@@ -1,7 +1,7 @@
 # 🛠️ Hermes Patches
 
-> **Non-intrusive Production Enhancement Patches for Hermes Agent**  
-> Supercharge your [Hermes Agent](https://github.com/NousResearch/hermes-agent) deployment with **exact token telemetry & cache hit metering, Telegram native Markdown pipe table bypass, localized bot command menu, SQLite production concurrency auto-healing, gateway streaming control & rate-limit shield, deep thinking cleaner, and 4096 safe message chunking**.
+> **Non-intrusive Turnkey Production Enhancement Patches for Hermes Agent**  
+> Supercharge your [Hermes Agent](https://github.com/NousResearch/hermes-agent) deployment with **exact token telemetry & cache hit metering, Telegram native Markdown pipe table bypass, localized bot command menu, SQLite production concurrency auto-healing, gateway streaming control & rate-limit shield, deep thinking cleaner, 4096 safe message chunking, zero-config initialization, and seamless auto-restart**.
 
 <p align="center">
   <b>English</b> | <a href="README.md"><b>简体中文</b></a> | <a href="CHANGELOG.md"><b>📝 Changelog</b></a> | <a href="https://github.com/shali10/hermes-patches/releases"><b>🏷️ Releases</b></a>
@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/shali10/hermes-patches/releases"><img src="https://img.shields.io/github/v/release/shali10/hermes-patches?color=blue&label=Release" alt="Latest Release" /></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-v1.2.0-orange.svg" alt="Changelog" /></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-v1.3.0-orange.svg" alt="Changelog" /></a>
   <a href="https://github.com/shali10/hermes-patches/actions/workflows/test.yml"><img src="https://github.com/shali10/hermes-patches/actions/workflows/test.yml/badge.svg" alt="CI Status" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg" alt="Python 3.10+" /></a>
@@ -24,7 +24,7 @@
 <a id="features"></a>
 ## ✨ Features & Comparison
 
-| Module | Upstream Vanilla | With hermes-patches ✨ |
+| Module | Upstream Vanilla | With hermes-patches (v1.3.0) ✨ |
 |---|---|---|
 | **📊 Token Telemetry** | Minimal model & percentage only (`gpt-4o · 7%`) | **Full telemetry**: Prompt total, cache hits & hit rate (%), output tokens, context %, and execution latency with formatted integers. |
 | **📑 Telegram Pipe Tables** | Markdown tables often degraded to plain unordered lists | **100% bypass for native pipe tables**, rendering modern rich text tables on desktop & mobile Telegram clients. |
@@ -34,6 +34,8 @@
 | **🚫 Streaming Control & 429 Shield** | Rapid `editMessageText` causes UI flickering and triggers Telegram 429 Flood Limits | **Honors global `display.streaming: false`**, delivering complete clean responses in one final delivery without rate-limits. |
 | **🧠 Deep Thinking Cleaner** | Reasoning models spam large `<think>` blocks in CLI and leak partial drafts | **Full suppression of thinking tags** (`<think>`, `<thought>`, `<antml:thought>` & unclosed blocks), leaving only clean responses. |
 | **✂️ 4096 Smart Message Split** | Truncating 4096+ chars breaks code fences or causes `can't parse entities` | **Splits at natural paragraph boundaries (`\n\n`)**, automatically closing and reopening code fences & tables. |
+| **⚙️ Zero-Config Out-of-the-Box** | Requires manual config tweaks to show footers | **Automatically initializes `~/.hermes/config.yaml`** with all telemetry metrics pre-configured. |
+| **🔄 Seamless Auto-Restart** | Users have to manually find processes and restart | **Automatically reloads and restarts `hermes-gateway` service**, effective immediately in 1 step. |
 | **🚀 Upgrade-Immune Guard** | Hermes source updates overwrite local patches | **systemd `ExecStartPre` supervision hook**, automatically re-applying patches on restart. |
 
 ---
@@ -95,61 +97,74 @@ For DeepSeek-R1, QwQ, Claude 3.7 Thinking, or Gemini Thinking models:
                │   hermes-patches Engine      │
                │   • Inspects source files    │
                │   • py_compile syntax test   │
+               │   • Auto-updates config.yaml │
+               │   • Cleans stale __pycache__ │
                │   • Idempotent atomic update │
                └──────────────┬───────────────┘
                               │
                               ▼
                ┌──────────────────────────────┐
-               │     Hermes Core Ready        │
-               │  [Telemetry | Pipe Tables    │
-               │   DB Healing | Quiet Stream  │
-               │   Clean Think | Smart Split] │
+               │     Hermes Agent Ready       │
+               │  [Tokens | Tables | DB Heal  │
+               │   Quiet Stream | Clean Think │
+               │   Smart Split | Zero Config] │
                └──────────────────────────────┘
 ```
 
 ---
 
 <a id="safety"></a>
-## 🛡️ Production Safety Design
+## 🛡️ Safety Mechanisms
 
-1. **🔬 Atomic Compilation Verification**: All transformations are performed in isolated temporary files and checked via Python's native `py_compile.compile(..., doraise=True)`. The target file is replaced atomically (`os.replace`) ONLY when syntax passes.
-2. **🔄 100% Idempotent**: Safe to run repeatedly; signatures prevent duplicate code injection.
-3. **💾 Automatic Mirror Backups (`.bak`)**: Automatically creates `.bak` backups before modifying any files, enabling instantaneous rollback.
+1. **🔬 Atomic Bytecode Pre-compilation**: Modifications undergo strict `py_compile.compile(..., doraise=True)` checks in isolated temporary files before atomic `os.replace`.
+2. **🔄 Instant Rollback**: Backups (`.bak`) are preserved automatically. Use `--uninstall` to restore stock upstream code.
+3. **♻️ 100% Idempotent**: Safe to run repeatedly; existing signatures are skipped cleanly.
+4. **🧹 Bytecode Invalidation**: Purges stale `__pycache__` and `.pyc` files on completion.
 
 ---
 
 <a id="installation"></a>
-## 🚀 Quick Start (Installation)
+## 🚀 Installation
 
-### 1. Standard One-Line Install
+### Option A: Turnkey One-Liner (Recommended)
 
-Run on your Linux server hosting Hermes Agent:
+Run directly on the server hosting Hermes Agent:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash
 ```
 
+> **✨ What happens automatically**:
+> 1. 🔍 **Adaptive Probing**: Detects active Hermes install path across running processes, systemd, shebangs & virtualenvs.
+> 2. 💉 **Injects All Patches**: Applies and verifies all 8 enhancement modules.
+> 3. ⚙️ **Auto-Configures**: Updates `~/.hermes/config.yaml` to ensure footers & parameters are enabled.
+> 4. 🧹 **Cache Purging**: Cleans all stale `.pyc` and `__pycache__` bytecode directories.
+> 5. 🚀 **Systemd Hook**: Installs `ExecStartPre` auto-healing guard.
+> 6. 🔄 **Smooth Restart**: Restarts `hermes-gateway` service automatically — instant effect without manual effort!
+
 ---
 
-### 2. Selective & Modular Patching (Advanced)
-
-Clone and run locally:
+### Option B: Interactive Menu
 
 ```bash
 git clone https://github.com/shali10/hermes-patches.git
 cd hermes-patches
+bash install.sh
+```
 
-# 1. List all available patch modules
-python3 hermes_patches.py --list-patches
+---
 
-# 2. Preview changes (Dry Run)
+### Option C: Advanced CLI Flags
+
+```bash
+# 1. Preview changes (Dry Run)
 python3 hermes_patches.py --dry-run -v
 
-# 3. Apply only streaming control, clean thinking, and rich table bypass
-python3 hermes_patches.py --only nostream clean-think table
+# 2. Select specific patches with auto-config and auto-restart
+python3 hermes_patches.py --only nostream clean-think table --auto-config --restart
 
-# 4. Apply all patches EXCEPT menu localization
-python3 hermes_patches.py --skip menu
+# 3. Apply all except menu localization
+python3 hermes_patches.py --skip menu --auto-config --restart
 ```
 
 ---
@@ -159,70 +174,49 @@ python3 hermes_patches.py --skip menu
 
 | Patch ID | Aliases | Target Files | Description |
 |---|---|---|---|
-| `footer` | `runtime-footer`, `token`, `stats` | `gateway/runtime_footer.py`<br>`gateway/run.py` | Full prompt, cache hit, output token, context %, and latency telemetry. |
-| `table` | `cjk-table`, `telegram-table`, `pipe-table` | `plugins/platforms/telegram/adapter.py` | Bypasses desktop CJK rich text garble check to allow native pipe tables. |
-| `menu` | `telegram-menu`, `menu-zh`, `i18n` | `hermes_cli/commands.py` | Localizes Telegram bot command descriptions into Chinese. |
-| `db` | `state-db`, `sqlite`, `durability` | `hermes_state.py` | Injects `busy_timeout=5000` and session foreign key auto-healing. |
-| `tirith` | `approval`, `security`, `low-warn` | `tools/approval.py` | Automatically passes through LOW/INFO static security warnings. |
-| `nostream` | `no-stream`, `quiet-stream`, `stream-shield` | `gateway/run.py` | Honors `display.streaming: false` and shields against Telegram 429 flood limits. |
-| `clean-think` | `think`, `reasoning`, `suppress-thinking` | `cli.py`<br>`gateway/stream_consumer.py` | Cleans thinking/reasoning tags and mutes noisy CLI thinking popups. |
-| `smart-split` | `split`, `chunking`, `telegram-split` | `gateway/platforms/base.py` | Splits 4096+ char messages at paragraph breaks (`\n\n`) to preserve Markdown structure. |
+| `footer` | `runtime-footer`, `token`, `stats` | `gateway/runtime_footer.py`<br>`gateway/run.py` | Renders Prompt totals, cache read tokens, outputs, latency, and context %. |
+| `table` | `cjk-table`, `telegram-table`, `pipe-table` | `plugins/platforms/telegram/adapter.py` | Allows Telegram desktop/mobile native Markdown pipe table rendering. |
+| `menu` | `telegram-menu`, `menu-zh`, `i18n` | `hermes_cli/commands.py` | Localizes Telegram bot `/start`, `/new`, `/status`... command descriptions. |
+| `db` | `state-db`, `sqlite`, `durability` | `hermes_state.py` | Adds `busy_timeout=5000` & auto-heals missing session parent rows. |
+| `tirith` | `approval`, `security`, `low-warn` | `tools/approval.py` | Auto-approves LOW/INFO security scanner warnings. |
+| `nostream` | `no-stream`, `quiet-stream`, `stream-shield` | `gateway/run.py` | Honors `display.streaming: false` to eliminate message flickers & 429 flood errors. |
+| `clean-think` | `think`, `reasoning`, `suppress-thinking` | `cli.py`<br>`gateway/stream_consumer.py` | Strips `<think>` tags and suppresses verbose CLI thinking popups. |
+| `smart-split` | `split`, `chunking`, `telegram-split` | `gateway/platforms/base.py` | Splits 4096+ char messages at paragraph breaks (`\n\n`) and repairs code fences. |
 
 ---
 
 <a id="faq"></a>
 ## ❓ FAQ & Troubleshooting
 
-### Q1: Why don't I see the telemetry footer after applying patches and restarting?
-* **Reason**: Hermes Agent has `display.runtime_footer` disabled by default. While the patch wires up all metrics in the codebase, you still need to activate footer display.
-* **Solution**:
-  1. **Easiest**: Send **`/footer on`** directly to your Telegram bot in chat;
-  2. **Via CLI**: Run `hermes config set display.runtime_footer.enabled true` and restart Gateway.
+### Q1: Why wasn't the footer appearing previously after a reboot?
+* **Resolved in v1.3.0**: The installer now automatically initializes `~/.hermes/config.yaml` with `display.runtime_footer.enabled: true` and all metric fields.
+* **Manual check**: Run `hermes config get display.runtime_footer` or send `/footer on` in Telegram.
 
-### Q2: Why are the bot commands still displayed in English when typing `/`?
-* **Reason**: The Telegram client locally caches bot command descriptions.
-* **Solution**: Send a message to the bot or **completely restart/quit your Telegram client app** to force a refresh.
+### Q2: Why are bot commands still in English in Telegram?
+* Telegram caches bot command lists locally. Send a message to the bot or fully close/kill the Telegram client and restart it to refresh the cache.
 
-### Q3: How do I install patches inside a Docker container?
-* **Reason**: Running the script on the host OS modifies host Python files, not containerized files.
-* **Solution**: Execute the installer inside your running container:
-  ```bash
-  docker exec -it <container_name_or_id> bash -c "curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash"
-  docker restart <container_name_or_id>
-  ```
-
-### Q4: How do I verify if patches were successfully injected?
-* **Solution**: Run the installer in Dry-Run mode:
-  ```bash
-  curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash -s -- --dry-run -v
-  ```
-  If it outputs `⚪ [UNCHANGED]` or `🟢 [APPLIED]`, the patches are 100% active.
-
-### Q5: How do I properly restart Hermes Gateway?
-* **Solution**:
-  * **Telegram Remote**: Send **`/restart`** directly in chat with the bot;
-  * **Systemd**: Run `systemctl restart hermes-gateway`;
-  * **Process**: If running inside `tmux` / `screen`, terminate the existing process and start it afresh.
+### Q3: How to apply patches in Docker containers?
+```bash
+docker exec -it <container_name> bash -c "curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash"
+docker restart <container_name>
+```
 
 ---
 
 <a id="changelog"></a>
 ## 📝 Changelog
 
-| Version | Release Date | Key Updates | Link |
+| Version | Date | Highlights | Details |
 |:---:|:---:|---|:---:|
-| **`v1.2.0`** | 2026-08-29 | Quiet streaming (429 shield), deep thinking cleaner, 4096 smart chunking, interactive menu & FAQ | [Details 📄](CHANGELOG.md#v120---2026-08-29) |
-| **`v1.1.0`** | 2026-08-29 | Modular `--only` / `--skip` selection, Tirith low-warn bypass, bilingual docs & upstream CI | [Details 📄](CHANGELOG.md#v110---2026-08-29) |
-| **`v1.0.0`** | 2026-08-29 | Token runtime footer, Telegram CJK native tables, menu localization, SQLite lock self-healing | [Details 📄](CHANGELOG.md#v100---2026-08-29) |
-
-👉 **For complete release notes and history, see**: [CHANGELOG.md](CHANGELOG.md) or [GitHub Releases](https://github.com/shali10/hermes-patches/releases)
+| **`v1.3.0`** | 2026-08-29 | **🚀 Turnkey zero-config init + automatic service restart + multi-stage path probe + bytecode purging** | [View 📄](CHANGELOG.md#v130---2026-08-29) |
+| **`v1.2.0`** | 2026-08-29 | Added quiet streaming (429 shield), deep thinking cleaner, 4096 smart chunker, interactive menu & FAQ | [View 📄](CHANGELOG.md#v120---2026-08-29) |
+| **`v1.1.0`** | 2026-08-29 | Added `--only` / `--skip` modular selection, Tirith low-risk bypass, bilingual docs & CI | [View 📄](CHANGELOG.md#v110---2026-08-29) |
+| **`v1.0.0`** | 2026-08-29 | Initial release: Full token telemetry, Telegram pipe tables, menu i18n, SQLite durability | [View 📄](CHANGELOG.md#v100---2026-08-29) |
 
 ---
 
 <a id="uninstall"></a>
-## ↩️ Rollback & Uninstall
-
-To cleanly revert all modifications:
+## ↩️ Uninstall & Rollback
 
 ```bash
 bash install.sh --uninstall
@@ -230,7 +224,6 @@ bash install.sh --uninstall
 
 ---
 
-<a id="contributing"></a>
 ## 📄 License
 
-This project is licensed under the [MIT License](LICENSE).
+Licensed under the [MIT License](LICENSE).
