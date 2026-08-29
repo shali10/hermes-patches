@@ -19,13 +19,13 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Test Dependencies
-        run: |
-          pip install pyyaml
-
       - name: Clone latest upstream Hermes Agent
         run: |
           git clone --depth=1 https://github.com/NousResearch/hermes-agent.git /tmp/hermes-agent
+
+      - name: Install Hermes Agent Dependencies
+        run: |
+          pip install -r /tmp/hermes-agent/requirements.txt || pip install pyyaml httpx python-telegram-bot pydantic
 
       - name: Test List Patches & Dry Run
         run: |
