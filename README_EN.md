@@ -24,7 +24,7 @@
 <a id="features"></a>
 ## ✨ Features & Comparison
 
-| Module | Upstream Vanilla | With hermes-patches (v1.3.0) ✨ |
+| Module | Upstream Vanilla | With hermes-patches (v1.3.7) ✨ |
 |---|---|---|
 | **📊 Token Telemetry** | Minimal model & percentage only (`gpt-4o · 7%`) | **Full telemetry**: Prompt total, cache hits & hit rate (%), output tokens, context %, and execution latency with formatted integers. |
 | **📑 Telegram Pipe Tables** | Markdown tables often degraded to plain unordered lists | **100% bypass for native pipe tables**, rendering modern rich text tables on desktop & mobile Telegram clients. |
@@ -208,6 +208,7 @@ docker restart <container_name>
 
 | Version | Date | Highlights | Details |
 |:---:|:---:|---|:---:|
+| **`v1.3.7`** | 2026-08-29 | **🎯 Dual-path token resolution + true Prompt Total (Input+Cache) & KV cache hit rate alignment** | [View 📄](CHANGELOG.md#v137---2026-08-29) |
 | **`v1.3.0`** | 2026-08-29 | **🚀 Turnkey zero-config init + automatic service restart + multi-stage path probe + bytecode purging** | [View 📄](CHANGELOG.md#v130---2026-08-29) |
 | **`v1.2.0`** | 2026-08-29 | Added quiet streaming (429 shield), deep thinking cleaner, 4096 smart chunker, interactive menu & FAQ | [View 📄](CHANGELOG.md#v120---2026-08-29) |
 | **`v1.1.0`** | 2026-08-29 | Added `--only` / `--skip` modular selection, Tirith low-risk bypass, bilingual docs & CI | [View 📄](CHANGELOG.md#v110---2026-08-29) |
