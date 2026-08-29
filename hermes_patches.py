@@ -3,7 +3,7 @@
 hermes-patches — Non-intrusive Enhancement Patches for Hermes Agent
 Repository: https://github.com/shali10/hermes-patches
 
-Provides full token metering, CJK native rich table support, Telegram menu localization,
+Provides full token metering, CJK native rich table support, Telegram menu & /help /commands full localization,
 production database durability enhancements, low-severity security prompt bypass,
 gateway streaming control (quiet delivery & flood shield), deep thinking/reasoning suppression,
 Telegram 4096 safe long-message chunking, automated zero-config initialization,
@@ -41,10 +41,10 @@ PATCH_REGISTRY = [
     },
     {
         "id": "menu",
-        "aliases": ["telegram-menu", "menu-zh", "i18n", "localization"],
-        "name": "🇨🇳 Telegram 快捷命令中文菜单汉化",
+        "aliases": ["telegram-menu", "menu-zh", "help-zh", "i18n", "localization"],
+        "name": "🇨🇳 Telegram 快捷菜单与 /help /commands 全中文汉化",
         "method": "patch_telegram_menu_zh",
-        "description": "将 /start, /new, /reset, /status... 等 Bot 快捷指令描述汉化为地道中文。",
+        "description": "全量汉化 Telegram Bot 指令菜单以及 /help、/commands 全部 99 个斜杠命令说明与用法提示。",
     },
     {
         "id": "db",
@@ -352,50 +352,160 @@ def format_runtime_footer('''
         return self.apply_file_patch("plugins/platforms/telegram/adapter.py", transform, "📑 Telegram 原生表格放行")
 
     # -------------------------------------------------------------
-    # Patch 3: Telegram Menu Chinese Localization
+    # Patch 3: Telegram Menu & /help /commands Full Chinese Localization
     # -------------------------------------------------------------
     def patch_telegram_menu_zh(self) -> bool:
         def transform(src: str) -> str:
-            marker = "_TELEGRAM_ZH_DESCRIPTIONS: dict[str, str] = {"
-            if marker in src:
-                return src
+            cand = src
 
-            start_sig = "def telegram_bot_commands() -> list[tuple[str, str]]:\n"
-            end_sig = "\n\n# Telegram allows up to 100 BotCommands."
+            zh_dict_block = '''_TELEGRAM_ZH_DESCRIPTIONS: dict[str, str] = {
+    "start": "响应平台启动请求（静默确认）",
+    "new": "新建对话会话（重置会话 ID 与历史）",
+    "topic": "开启或管理 Telegram 私聊话题会话",
+    "clear": "清屏并开启全新会话",
+    "redraw": "强制重绘终端界面（修复终端显示漂移）",
+    "history": "查看当前会话的历史对话记录",
+    "save": "导出当前对话记录 (JSON/MD/HTML)",
+    "retry": "重新发送上一条消息给 Agent",
+    "prompt": "在 $EDITOR 中编辑 Markdown 提示词并发送",
+    "undo": "回退最近 N 轮对话并重新提问（默认 1）",
+    "title": "为当前会话设置或重命名标题",
+    "handoff": "将当前会话转交至即时通讯平台 (Telegram/Discord 等)",
+    "branch": "从当前对话分叉创建新会话（探索不同路径）",
+    "worktree": "查看、创建或清理隔离的 git worktree 工作区",
+    "compress": "压缩对话上下文（保留最近 N 轮上下文）",
+    "rollback": "查看或恢复文件系统快照检查点",
+    "snapshot": "创建或恢复 Hermes 配置与状态快照",
+    "export": "导出当前配置档案（配置、技能与主题包）",
+    "import": "导入外部配置档案并作为新 Profile",
+    "stop": "终止当前所有正在运行的后台进程与任务",
+    "pause": "全局紧急暂停新任务执行（/pause off 恢复）",
+    "approve": "手动批准待执行的敏感/危险命令",
+    "deny": "拒绝待执行的危险命令（可附带原因）",
+    "background": "在后台异步执行一条提示词任务",
+    "agents": "查看当前活跃的子代理与运行中任务",
+    "journey": "打开自主学习与进化时间线 (Learning Journey)",
+    "queue": "将提示词加入下一轮执行队列（不打断当前运行）",
+    "steer": "在下次工具调用后插入实时干预指令",
+    "goal": "设置跨轮次持续自动推进的长期目标",
+    "heartbeat": "设置空闲时自动唤醒执行的周期性提示词",
+    "refine": "立即复盘当前对话并将经验沉淀至记忆与技能",
+    "review": "指派独立子代理评审当前工作 (PR/代码/文档)",
+    "loop": "在当前会话中按固定时间间隔循环执行任务",
+    "moa": "通过多代理混合架构 (MoA) 预设运行一次提示词",
+    "subgoal": "为当前活跃目标添加或管理子验收标准",
+    "status": "查看当前会话状态、活跃模型、Token 与上下文",
+    "egress": "查看 Docker 出口代理与网络转发状态",
+    "context": "查看上下文窗口占用仪表盘、分类细项与吞吐量",
+    "whoami": "查看当前用户的斜杠命令权限 (Admin / User)",
+    "profile": "查看当前活跃的 Profile 名称与主目录路径",
+    "sethome": "将当前聊天会话设置为主频道 (Home Channel)",
+    "resume": "恢复之前命名的历史会话",
+    "sessions": "浏览、检索并恢复历史会话列表",
+    "config": "查看或检查当前系统配置",
+    "model": "切换模型（仅当前会话生效；--global 全局生效）",
+    "codex-runtime": "切换 OpenAI/Codex 模型的 Codex App-Server 运行时",
+    "personality": "设置或切换预定义人格设定",
+    "statusbar": "切换底部模型与上下文状态栏显示",
+    "battery": "在状态栏切换彩色电量/资源指示器",
+    "timestamps": "切换消息与历史记录的时间戳显示 [HH:MM]",
+    "diff": "查看工作区中的 Git 变更与 Diff 差异",
+    "verbose": "循环切换工具执行进度显示档位 (off/new/all/verbose)",
+    "focus": "切换专注视图（仅展示用户提示与最终答复）",
+    "footer": "切换回复末尾的运行信息与 Token 统计页脚 (on/off)",
+    "yolo": "切换 YOLO 极速模式（自动跳过危险命令审批）",
+    "approvals": "查看或设置持久化危险命令审批策略 (manual/smart/off)",
+    "reasoning": "管理思考/推理强度级别与显示方式",
+    "fast": "切换快速处理模式（OpenAI Priority / Anthropic Fast）",
+    "skin": "查看或更换终端显示皮肤与主题",
+    "indicator": "选择终端等待指示器样式 (ascii/emoji/kaomoji/unicode)",
+    "voice": "切换语音模式（纯文本 / 语音回复 / TTS 播报）",
+    "wake": "切换 'Hey Hermes' 语音唤醒词监听",
+    "busy": "配置当 Agent 正在执行时按回车的行为策略",
+    "tools": "管理工具集：查看、禁用或启用指定工具",
+    "toolsets": "列出当前可用的工具集 (Toolsets)",
+    "skills": "搜索、安装、查看或管理可用技能库 (Skills)",
+    "memory": "查看待确认的记忆写入 / 切换记忆写入审批门禁",
+    "bundles": "查看技能组合包列表 (通过 /<name> 批量加载)",
+    "pet": "切换或领养终端 Petdex 宠物助手",
+    "hatch": "根据描述孵化并生成全新的 Petdex 宠物",
+    "learn": "从任意内容（目录、URL、对话、笔记）自主学习技能",
+    "init": "扫描仓库代码并自动生成/更新 AGENTS.md 指南",
+    "cron": "管理系统定时计划任务 (Cron Jobs)",
+    "suggestions": "查看系统智能推荐的自动化任务建议",
+    "blueprint": "从 Blueprint 模板快速配置自动化任务",
+    "curator": "管理后台技能自动维护与提炼系统",
+    "kanban": "多 Profile 协作看板（任务、关联、评论）",
+    "reload": "将 .env 环境变量热重载到当前运行会话",
+    "reload-mcp": "重新加载配置文件中的 MCP 服务器连接",
+    "reload-skills": "重新扫描 ~/.hermes/skills/ 目录下的技能变更",
+    "browser": "连接 Chromium 浏览器 CDP 或切换 Browser Use 模式",
+    "plugins": "列出已安装的插件清单及其运行状态",
+    "commands": "分页浏览全部可用命令与技能列表",
+    "help": "查看可用命令指南（/help skills 查看技能，/help <文本> 搜索）",
+    "palette": "打开模糊搜索命令面板 (Command Palette / Ctrl+P)",
+    "restart": "安全平滑重启 Hermes Gateway 实例",
+    "usage": "查看 Token 使用量统计与 Rate Limits 限额",
+    "subscription": "查看 Nous 账户订阅计划并在浏览器中管理",
+    "topup": "查看 Nous 账户余额并前往控制台充值",
+    "insights": "生成使用习惯、开销与效率分析洞察报告",
+    "platforms": "查看 Gateway 消息平台连接状态汇总",
+    "platform": "管理异常 Gateway 平台（暂停、恢复或列出）",
+    "copy": "复制上一条助手回复到系统剪贴板",
+    "paste": "从系统剪贴板粘贴图片并附加到下一轮对话",
+    "image": "附加本地图片文件到下一轮提示词",
+    "update": "将 Hermes Agent 检查并升级到最新版本",
+    "version": "查看 Hermes Agent 当前版本与环境信息",
+    "debug": "上传系统与日志调试报告并生成分享链接",
+    "quit": "退出 CLI 终端（--delete 同步删除会话历史）",
+}'''
 
-            start = src.find(start_sig)
-            end = src.find(end_sig, start)
-            if start < 0 or end < 0:
-                return src
+            # Clean any legacy _TELEGRAM_ZH_DESCRIPTIONS block if present
+            if "_TELEGRAM_ZH_DESCRIPTIONS: dict[str, str] = {" in cand:
+                cand = re.sub(r'_TELEGRAM_ZH_DESCRIPTIONS:\s*dict\[str,\s*str\]\s*=\s*\{.*?\n\}', '', cand, flags=re.DOTALL)
 
-            patch_block = '''_TELEGRAM_ZH_DESCRIPTIONS: dict[str, str] = {
-    "start": "响应 Telegram 的启动请求",
-    "new": "新建一个对话会话",
-    "reset": "重置当前会话（清理上下文）",
-    "clear": "清理上下文（保留设置）",
-    "status": "显示当前会话状态、活跃模型与 Token 统计",
-    "model": "查看或切换当前使用的模型",
-    "memory": "查看或搜索持久化记忆库",
-    "skills": "查看或管理当前可用技能",
-    "help": "显示可用命令与帮助信息",
-    "restart": "安全重启 Hermes Gateway 实例",
-    "doctor": "运行系统与组件健康诊断",
-    "footer": "切换页脚统计信息显示 (on/off)",
-}
+            # 1. Update _build_description with zh_dict_block
+            old_bd_pat = r'def _build_description\(cmd:\s*CommandDef\)\s*->\s*str:.*?(?=\n\n# Backwards-compatible|\n# Backwards-compatible)'
+            new_bd_code = zh_dict_block + '''\n\n\ndef _build_description(cmd: CommandDef) -> str:
+    """Build a CLI-facing description string including usage hint."""
+    desc = _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, cmd.description)
+    if cmd.args_hint:
+        return f"{desc} (用法: /{cmd.name} {cmd.args_hint})"
+    return desc'''
+            cand, count = re.subn(old_bd_pat, new_bd_code, cand, count=1, flags=re.DOTALL)
+            if count == 0 and "def _build_description(" in cand:
+                # Direct replacement fallback
+                bd_start = cand.find("def _build_description(")
+                bd_end = cand.find("\n\n# Backwards-compatible", bd_start)
+                if bd_start >= 0 and bd_end >= 0:
+                    cand = cand[:bd_start] + new_bd_code + cand[bd_end:]
 
+            # 2. Update gateway_help_lines to translate descriptions & alias note
+            old_ghl = '        lines.append(f"`/{cmd.name}{args}` -- {cmd.description}{alias_note}")'
+            new_ghl = '''        alias_note_zh = alias_note.replace("alias:", "别名:") if alias_note else ""
+        desc = _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, cmd.description)
+        lines.append(f"`/{cmd.name}{args}` -- {desc}{alias_note_zh}")'''
+            if old_ghl in cand:
+                cand = cand.replace(old_ghl, new_ghl, 1)
 
-def telegram_bot_commands() -> list[tuple[str, str]]:
-    """Return command list with localized descriptions."""
+            # 3. Update telegram_bot_commands
+            old_tbc = "def telegram_bot_commands() -> list[tuple[str, str]]:"
+            if old_tbc in cand and "_RAW_TELEGRAM_BOT_COMMANDS" not in cand:
+                start = cand.find(old_tbc)
+                end = cand.find("\n\n# Telegram allows up to 100 BotCommands.", start)
+                if start > 0 and end > 0:
+                    tbc_block = """def telegram_bot_commands() -> list[tuple[str, str]]:
+    \"\"\"Return command list with localized descriptions.\"\"\"
     cmds = []
     for cmd, desc in _RAW_TELEGRAM_BOT_COMMANDS:
         cmds.append((cmd, _TELEGRAM_ZH_DESCRIPTIONS.get(cmd, desc)))
-    return cmds'''
+    return cmds"""
+                    cand = cand.replace(old_tbc, "_RAW_TELEGRAM_BOT_COMMANDS: list[tuple[str, str]] = [", 1)
+                    cand = cand[:start] + tbc_block + cand[end:]
 
-            # Rename raw commands definition
-            cand = src.replace("def telegram_bot_commands() -> list[tuple[str, str]]:", "_RAW_TELEGRAM_BOT_COMMANDS: list[tuple[str, str]] = [", 1)
-            return src[:start] + patch_block + src[end:]
+            return cand
 
-        return self.apply_file_patch("hermes_cli/commands.py", transform, "🇨🇳 Telegram 快捷菜单汉化")
+        return self.apply_file_patch("hermes_cli/commands.py", transform, "🇨🇳 Telegram 快捷菜单与 /help /commands 汉化")
 
     # -------------------------------------------------------------
     # Patch 4: State DB Foreign Key & Contention Self-Heal
@@ -514,9 +624,6 @@ def telegram_bot_commands() -> list[tuple[str, str]]:
                 'self.show_reasoning = CLI_CONFIG["display"].get("show_reasoning", False)',
             )
             # Expand OPEN and CLOSE think tags
-            old_open = '_OPEN_TAGS = ("<REASONING_SCRPAD>", "<think>", "<reasoning>", "<THINKING>", "<thinking>", "<thought>")'
-            new_open = '_OPEN_TAGS = ("<REASONING_SCRPAD>", "<think>", "<reasoning>", "<THINKING>", "<thinking>", "<thought>", "<antml:thought>", "<reflection>", "<inner_monologue>")'
-            # Note: handle both REASONING_SCRATCHPAD and other variants
             cand = re.sub(
                 r'_OPEN_TAGS\s*=\s*\([^\)]+\)',
                 '_OPEN_TAGS = ("<REASONING_SCRATCHPAD>", "<think>", "<reasoning>", "<THINKING>", "<thinking>", "<thought>", "<antml:thought>", "<reflection>", "<inner_monologue>")',
@@ -768,6 +875,7 @@ def find_default_hermes_dir() -> Path:
 def ensure_runtime_config(dry_run: bool = False) -> bool:
     """
     Automatically initializes/ensures optimal settings in ~/.hermes/config.yaml:
+    - display.language = zh
     - display.runtime_footer.enabled = true
     - display.runtime_footer.fields = [model, prompt_tokens, cache_read, output_tokens, context_pct, elapsed_time]
     - display.platforms.telegram.streaming = false (quiet delivery & flood shield)
@@ -794,6 +902,7 @@ def ensure_runtime_config(dry_run: bool = False) -> bool:
     hermes_bin = shutil.which("hermes")
     if hermes_bin:
         try:
+            subprocess.run([hermes_bin, "config", "set", "display.language", "zh"], check=False, capture_output=True, timeout=5)
             subprocess.run([hermes_bin, "config", "set", "display.runtime_footer.enabled", "true"], check=True, capture_output=True, timeout=5)
             subprocess.run([
                 hermes_bin, "config", "set", "display.runtime_footer.fields",
@@ -813,6 +922,7 @@ def ensure_runtime_config(dry_run: bool = False) -> bool:
         if "runtime_footer:" not in raw_text:
             footer_yaml = """
 display:
+  language: zh
   runtime_footer:
     enabled: true
     fields:
@@ -824,13 +934,12 @@ display:
       - elapsed_time
 """
             if "display:" in raw_text:
-                # Insert runtime_footer under display:
-                raw_text = raw_text.replace("display:\n", "display:\n  runtime_footer:\n    enabled: true\n    fields:\n      - model\n      - prompt_tokens\n      - cache_read\n      - output_tokens\n      - context_pct\n      - elapsed_time\n", 1)
+                raw_text = raw_text.replace("display:\n", "display:\n  language: zh\n  runtime_footer:\n    enabled: true\n    fields:\n      - model\n      - prompt_tokens\n      - cache_read\n      - output_tokens\n      - context_pct\n      - elapsed_time\n", 1)
             else:
                 raw_text += footer_yaml
             
             config_file.write_text(raw_text, encoding="utf-8")
-            print(f"🟢 [已自动配置] 写入基础页脚计量配置至 {config_file}")
+            print(f"🟢 [已自动配置] 写入基础语言与页脚计量配置至 {config_file}")
         else:
             print(f"⚪ [已配置] 配置文件已存在 runtime_footer 设定 ({config_file})")
         return True
@@ -847,7 +956,6 @@ def restart_gateway_services() -> bool:
     # 1. Systemd service restart
     if shutil.which("systemctl"):
         try:
-            # Check if hermes-gateway unit exists
             status_proc = subprocess.run(["systemctl", "status", "hermes-gateway"], capture_output=True, text=True)
             if "hermes-gateway.service" in status_proc.stdout or "Loaded:" in status_proc.stdout:
                 print("🔄 正在平滑重启 hermes-gateway 系统服务...")

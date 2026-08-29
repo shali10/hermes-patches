@@ -228,14 +228,14 @@ fi
 show_menu() {
     clear 2>/dev/null || true
     echo -e "${BOLD}${CYAN}=====================================================${NC}"
-    echo -e "${BOLD}${BLUE}   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.3.0)   ${NC}"
+    echo -e "${BOLD}${BLUE}   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.3.1)   ${NC}"
     echo -e "${BOLD}${CYAN}=====================================================${NC}"
     echo -e " 目标路径: ${GREEN}${HERMES_DIR}${NC}\n"
     echo -e " ${BOLD}${GREEN}[1] 🚀 全量一键安装、自动配置并平滑重启 (推荐 / 直接回车)${NC}"
     echo -e " ---------------------------------------------------"
     echo -e " [2] 📊 Runtime Footer (Token 全量计量、缓存与耗时)"
     echo -e " [3] 📑 Telegram CJK 原生 Markdown 表格放行"
-    echo -e " [4] 🇨🇳 Telegram 快捷命令中文菜单汉化"
+    echo -e " [4] 🇨🇳 Telegram 快捷菜单与 /help /commands 全中文汉化"
     echo -e " [5] 🛡️ SQLite 生产级外键自愈与高并发防锁死"
     echo -e " [6] ⚡ Tirith 低风险扫描审批免打扰"
     echo -e " [7] 🚫 流式输出静默控制与 429 频控防护"

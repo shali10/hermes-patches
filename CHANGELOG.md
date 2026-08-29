@@ -5,6 +5,18 @@
 
 ---
 
+## [v1.3.1] - 2026-08-29
+
+### 🚀 新增特性 (Added)
+* **🇨🇳 全量 99 个命令与 `/help`、`/commands` 地道汉化**：
+  * 将 `menu` 汉化补丁升级为 **全量命令汉化引擎**，补齐官方 `COMMAND_REGISTRY` 中全部 99 个命令的专业中文释义。
+  * 深度重构 `gateway_help_lines()` 与 `_build_description()`，使在 Telegram / QQ / Discord / Web 发送 `/help`、`/commands` 时，命令功能说明、参数提示与 `(别名: /...)` 标签 100% 以清晰地道的中文输出。
+  * 终端 CLI 执行 `/help` 与命令补全同样享受全量中文释义。
+* **⚙️ 自动初始化 `display.language: zh`**：
+  * 在 `--auto-config` 流程中自动确保配置 `display.language: zh`，打通全系统内置多语言响应。
+
+---
+
 ## [v1.3.0] - 2026-08-29
 
 ### 🚀 新增特性 (Added)
