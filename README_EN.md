@@ -211,7 +211,7 @@ python3 hermes_patches.py --skip menu
 
 | Version | Release Date | Key Updates | Link |
 |:---:|:---:|---|:---:|
-| **`v1.2.0`** | 2026-08-29 | Quiet streaming control (Telegram 429 shield), deep thinking suppression, 4096 smart chunking | [Details 📄](CHANGELOG.md#v120---2026-08-29) |
+| **`v1.2.0`** | 2026-08-29 | Quiet streaming (429 shield), deep thinking cleaner, 4096 smart chunking, interactive menu & FAQ | [Details 📄](CHANGELOG.md#v120---2026-08-29) |
 | **`v1.1.0`** | 2026-08-29 | Modular `--only` / `--skip` selection, Tirith low-warn bypass, bilingual docs & upstream CI | [Details 📄](CHANGELOG.md#v110---2026-08-29) |
 | **`v1.0.0`** | 2026-08-29 | Token runtime footer, Telegram CJK native tables, menu localization, SQLite lock self-healing | [Details 📄](CHANGELOG.md#v100---2026-08-29) |
 
