@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/shali10/hermes-patches/releases"><img src="https://img.shields.io/github/v/release/shali10/hermes-patches?color=blue&label=Release" alt="Latest Release" /></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-v1.3.7-orange.svg" alt="Changelog" /></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-v1.3.8-orange.svg" alt="Changelog" /></a>
   <a href="https://github.com/shali10/hermes-patches/actions/workflows/test.yml"><img src="https://github.com/shali10/hermes-patches/actions/workflows/test.yml/badge.svg" alt="CI Status" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg" alt="Python 3.10+" /></a>
@@ -24,7 +24,7 @@
 <a id="features"></a>
 ## ✨ 核心特性与生产痛点对照
 
-| 模块 | 官方原生状态 | 安装 hermes-patches (v1.3.7) 后 ✨ |
+| 模块 | 官方原生状态 | 安装 hermes-patches (v1.3.8) 后 ✨ |
 |---|---|---|
 | **📊 Token 消耗全透视** | 仅显示精简模型与百分比（`gpt-4o · 7%`） | **全指标精准展示**：Prompt 总量、缓存命中数及百分比、输出 Token、执行耗时、上下文占用（千分位格式化） |
 | **📑 Telegram 原生表格** | CJK 中文字符下 Markdown 表格易被拦截退化为无序列表 | **100% 放行原生 Pipe Table**，享受现代 Telegram 原生高保真表格渲染 |
@@ -278,7 +278,7 @@ python3 hermes_patches.py --skip menu --auto-config --restart
 
 | 版本 | 发布日期 | 重点更新摘要 | 详情链接 |
 |:---:|:---:|---|:---:|
-| **`v1.3.7`** | 2026-08-29 | **🎯 Token 计量双路兼容 + 真实 Prompt 总量 (Input+Cache) 与缓存命中 100% 精确对齐** | [查看详情 📄](CHANGELOG.md#v137---2026-08-29) |
+| **`v1.3.8`** | 2026-08-29 | **🎯 Token 计量双路兼容 + 真实 Prompt 总量 (Input+Cache) 与缓存命中 100% 精确对齐** | [查看详情 📄](CHANGELOG.md#v137---2026-08-29) |
 | **`v1.3.0`** | 2026-08-29 | **🚀 零配置开箱即用 + 自动平滑重启 + 终极自适应寻径引擎 + 字节码全量清理** | [查看详情 📄](CHANGELOG.md#v130---2026-08-29) |
 | **`v1.2.0`** | 2026-08-29 | 增加流式静默控制（429 护盾）、思考过程深度净化、4096 智能切分、交互式中文数字菜单与排障 FAQ | [查看详情 📄](CHANGELOG.md#v120---2026-08-29) |
 | **`v1.1.0`** | 2026-08-29 | 增加 `--only` / `--skip` 模块化选择、Tirith 低危审批放行、双语文档与 CI | [查看详情 📄](CHANGELOG.md#v110---2026-08-29) |

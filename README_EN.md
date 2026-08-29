@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/shali10/hermes-patches/releases"><img src="https://img.shields.io/github/v/release/shali10/hermes-patches?color=blue&label=Release" alt="Latest Release" /></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-v1.3.7-orange.svg" alt="Changelog" /></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-v1.3.8-orange.svg" alt="Changelog" /></a>
   <a href="https://github.com/shali10/hermes-patches/actions/workflows/test.yml"><img src="https://github.com/shali10/hermes-patches/actions/workflows/test.yml/badge.svg" alt="CI Status" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg" alt="Python 3.10+" /></a>
@@ -24,7 +24,7 @@
 <a id="features"></a>
 ## ✨ Features & Comparison
 
-| Module | Upstream Vanilla | With hermes-patches (v1.3.7) ✨ |
+| Module | Upstream Vanilla | With hermes-patches (v1.3.8) ✨ |
 |---|---|---|
 | **📊 Token Telemetry** | Minimal model & percentage only (`gpt-4o · 7%`) | **Full telemetry**: Prompt total, cache hits & hit rate (%), output tokens, context %, and execution latency with formatted integers. |
 | **📑 Telegram Pipe Tables** | Markdown tables often degraded to plain unordered lists | **100% bypass for native pipe tables**, rendering modern rich text tables on desktop & mobile Telegram clients. |
@@ -208,7 +208,7 @@ docker restart <container_name>
 
 | Version | Date | Highlights | Details |
 |:---:|:---:|---|:---:|
-| **`v1.3.7`** | 2026-08-29 | **🎯 Dual-path token resolution + true Prompt Total (Input+Cache) & KV cache hit rate alignment** | [View 📄](CHANGELOG.md#v137---2026-08-29) |
+| **`v1.3.8`** | 2026-08-29 | **🎯 Dual-path token resolution + true Prompt Total (Input+Cache) & KV cache hit rate alignment** | [View 📄](CHANGELOG.md#v137---2026-08-29) |
 | **`v1.3.0`** | 2026-08-29 | **🚀 Turnkey zero-config init + automatic service restart + multi-stage path probe + bytecode purging** | [View 📄](CHANGELOG.md#v130---2026-08-29) |
 | **`v1.2.0`** | 2026-08-29 | Added quiet streaming (429 shield), deep thinking cleaner, 4096 smart chunker, interactive menu & FAQ | [View 📄](CHANGELOG.md#v120---2026-08-29) |
 | **`v1.1.0`** | 2026-08-29 | Added `--only` / `--skip` modular selection, Tirith low-risk bypass, bilingual docs & CI | [View 📄](CHANGELOG.md#v110---2026-08-29) |

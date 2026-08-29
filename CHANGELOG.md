@@ -5,6 +5,17 @@
 
 ---
 
+## [v1.3.8] - 2026-08-29
+
+### 🐛 关键修复：补齐网关层 Cache Read Token 传输链路 (Gateway Cache Read Ingestion Fix)
+- **修复网关运行态 `cache_read_tokens` 传输断链**：
+  - 深度重构 `patch_runtime_footer` 中的 `transform_gateway_run`：在官方 `gateway/run.py` 构造 `agent_result` 字典时，主动提取 `_cache_read_toks = getattr(_agent, "session_cache_read_tokens", 0) or 0` 并注入到正常返回与异常返回的两处 `agent_result` Payload 中。
+  - 彻底解决由于上游官方网关未透传缓存字段、导致消费端 `agent_result.get("cache_read_tokens")` 永远返回 `None`/`0`、进而引发页脚缓存命中率持续固定显示 `0 (0%)` 的根本缺陷。
+- **全链路 Token 提取与注入幂等加固**：
+  - 升级 `transform_gateway_run` 的注入算法，支持无损识别多版本官方与二次魔改源码，实现安全幂等注入。
+
+---
+
 ## [v1.3.7] - 2026-08-29
 
 ### 🎯 运行态取数兼容与双路 Token 注入加固 (Runtime Token Ingestion Fix)

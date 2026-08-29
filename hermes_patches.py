@@ -266,8 +266,36 @@ def format_runtime_footer('''
 
         def transform_gateway_run(src: str) -> str:
             cand = src
-            # Parameter injection into build_footer_line
-            bfl_pat = r'_footer_line\s*=\s*_bfl\(\s*user_config=_load_gateway_config\(\),\s*platform_key=_platform_config_key\(source\.platform\),\s*model=agent_result\.get\("model"\),.*?turn_seconds=_turn_seconds,.*?\)'
+
+            # 1. Ensure _cache_read_toks variable is declared
+            if '_cache_read_toks = 0' not in cand and '_output_toks = 0' in cand:
+                cand = cand.replace('_output_toks = 0', '_output_toks = 0\n        _cache_read_toks = 0', 1)
+
+            # 2. Extract _cache_read_toks from agent in extraction blocks
+            target_extract = '_output_toks = getattr(_agent, "session_completion_tokens", 0)'
+            replacement_extract = '''_output_toks = getattr(_agent, "session_completion_tokens", 0)
+            _cache_read_toks = getattr(_agent, "session_cache_read_tokens", 0) or 0'''
+            if target_extract in cand and '_cache_read_toks = getattr(_agent' not in cand:
+                cand = cand.replace(target_extract, replacement_extract)
+
+            # 3. Inject "cache_read_tokens": _cache_read_toks into return dicts
+            target_ret1 = '''                "input_tokens": _input_toks,
+                "output_tokens": _output_toks,'''
+            replacement_ret1 = '''                "input_tokens": _input_toks,
+                "output_tokens": _output_toks,
+                "cache_read_tokens": _cache_read_toks,'''
+            if target_ret1 in cand and '"cache_read_tokens": _cache_read_toks' not in cand:
+                cand = cand.replace(target_ret1, replacement_ret1)
+
+            target_ret2 = '''            "input_tokens": _input_toks,
+            "output_tokens": _output_toks,'''
+            replacement_ret2 = '''            "input_tokens": _input_toks,
+            "output_tokens": _output_toks,
+            "cache_read_tokens": _cache_read_toks,'''
+            if target_ret2 in cand and '"cache_read_tokens": _cache_read_toks' not in cand:
+                cand = cand.replace(target_ret2, replacement_ret2)
+
+            # 4. Parameter injection into build_footer_line
             new_bfl = '''_footer_line = _bfl(
                     user_config=_load_gateway_config(),
                     platform_key=_platform_config_key(source.platform),
@@ -281,10 +309,11 @@ def format_runtime_footer('''
                     cache_read_tokens=agent_result.get("cache_read_tokens") or 0,
                 )'''
 
-            if re.search(bfl_pat, cand, flags=re.DOTALL):
-                cand = re.sub(bfl_pat, new_bfl, cand, count=1, flags=re.DOTALL)
+            bfl_block_pat = r'_footer_line\s*=\s*_bfl\(.*?\n\s*\)(?=\s*except Exception as _footer_err:)'
+            if re.search(bfl_block_pat, cand, flags=re.DOTALL):
+                cand = re.sub(bfl_block_pat, new_bfl, cand, count=1, flags=re.DOTALL)
 
-            # platform key compatibility
+            # 5. platform key compatibility
             old_pkey = '''def _platform_config_key(platform: "Platform") -> str:
     """Map a Platform enum to its config.yaml key (LOCAL→"cli", rest→enum value)."""
     return "cli" if platform == Platform.LOCAL else platform.value'''
