@@ -23,6 +23,11 @@ fi
 
 # Detect Hermes install directory
 detect_hermes_dir() {
+    if [ -n "$HERMES_SOURCE_DIR" ] && [ -d "$HERMES_SOURCE_DIR" ] && [ -f "$HERMES_SOURCE_DIR/hermes_state.py" ]; then
+        echo "$HERMES_SOURCE_DIR"
+        return 0
+    fi
+
     local candidates=(
         "/usr/local/lib/hermes-agent"
         "/opt/hermes-agent"
@@ -78,19 +83,34 @@ if [ "$1" == "--uninstall" ]; then
     
     if [ -f /etc/systemd/system/hermes-gateway.service.d/10-local-patches.conf ]; then
         rm -f /etc/systemd/system/hermes-gateway.service.d/10-local-patches.conf
-        systemctl daemon-reload
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl daemon-reload || true
+        fi
         echo "Removed systemd patch hook."
     fi
+
+    if [ -f /root/.hermes/scripts/hermes-local-patches.py ]; then
+        rm -f /root/.hermes/scripts/hermes-local-patches.py
+        echo "Cleaned /root/.hermes/scripts/hermes-local-patches.py."
+    fi
+
     echo -e "${GREEN}✓ Uninstallation complete.${NC}"
     exit 0
 fi
 
-# Run patches
+# Run patches with forwarded arguments
 echo -e "${BLUE}Applying enhancement patches...${NC}"
-"$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" -v
+"$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" "$@"
 
-# Setup systemd auto-healing hook if gateway service exists
-if systemctl list-unit-files | grep -q "hermes-gateway.service"; then
+# If user only ran with --list-patches or --dry-run, do not touch systemd/config
+for arg in "$@"; do
+    if [ "$arg" == "--list-patches" ] || [ "$arg" == "--dry-run" ]; then
+        exit 0
+    fi
+done
+
+# Setup systemd auto-healing hook if gateway service exists and systemctl is present
+if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files 2>/dev/null | grep -q "hermes-gateway.service"; then
     echo -e "${BLUE}Configuring systemd auto-healing hook...${NC}"
     mkdir -p /root/.hermes/scripts
     cp -f "$PATCH_SCRIPT" /root/.hermes/scripts/hermes-local-patches.py
@@ -102,8 +122,10 @@ if systemctl list-unit-files | grep -q "hermes-gateway.service"; then
 Environment="HERMES_PATCH_SOURCE_ROOT=${HERMES_DIR}"
 ExecStartPre=/root/.hermes/scripts/hermes-local-patches.py
 EOF
-    systemctl daemon-reload
+    systemctl daemon-reload || true
     echo -e "${GREEN}✓ Auto-healing supervision hook configured (ExecStartPre).${NC}"
+else
+    echo -e "${YELLOW}Notice: hermes-gateway.service not found in systemd. Skipped systemd hook setup (Container/CLI mode).${NC}"
 fi
 
 # Ensure runtime_footer is enabled in config.yaml

@@ -4,7 +4,7 @@ hermes-patches — Non-intrusive Enhancement Patches for Hermes Agent
 Repository: https://github.com/shali10/hermes-patches
 
 Provides full token metering, CJK native rich table support, Telegram menu localization,
-and production database durability enhancements for Hermes Agent.
+production database durability enhancements, and low-severity security prompt bypass for Hermes Agent.
 """
 from __future__ import annotations
 
@@ -16,14 +16,62 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
-from typing import Callable, List, Tuple
+from typing import Callable, List, Optional, Set, Tuple
+
+
+PATCH_REGISTRY = [
+    {
+        "id": "footer",
+        "aliases": ["runtime-footer", "token", "tokens", "stats"],
+        "name": "Runtime Footer (Full Tokens, Cache Hit, Percent & Latency)",
+        "method": "patch_runtime_footer",
+        "description": "Exposes prompt tokens, cache hits, output tokens, context %, and latency in message footer.",
+    },
+    {
+        "id": "table",
+        "aliases": ["cjk-table", "telegram-table", "telegram-rich", "pipe-table"],
+        "name": "Telegram CJK Native Pipe Table Bypass",
+        "method": "patch_telegram_cjk_rich",
+        "description": "Bypasses desktop CJK rich text garble check to allow modern native pipe tables.",
+    },
+    {
+        "id": "menu",
+        "aliases": ["telegram-menu", "menu-zh", "i18n", "localization"],
+        "name": "Telegram Bot Command Menu Localization (Chinese)",
+        "method": "patch_telegram_menu_zh",
+        "description": "Translates default /start, /new, /reset, /status... bot menu descriptions to Chinese.",
+    },
+    {
+        "id": "db",
+        "aliases": ["state-db", "sqlite", "durability", "concurrency"],
+        "name": "SQLite State DB Durability & Foreign Key Auto-Healing",
+        "method": "patch_state_db",
+        "description": "Sets busy_timeout=5000 and auto-heals orphan session rows during high concurrency.",
+    },
+    {
+        "id": "tirith",
+        "aliases": ["approval", "security", "low-warn"],
+        "name": "Tirith Low-Severity Approval Prompt Bypass",
+        "method": "patch_approval_tirith",
+        "description": "Automatically approves non-blocking LOW/INFO security scanner warnings.",
+    },
+]
 
 
 class PatchEngine:
-    def __init__(self, target_dir: Path, dry_run: bool = False, verbose: bool = False):
+    def __init__(
+        self,
+        target_dir: Path,
+        dry_run: bool = False,
+        verbose: bool = False,
+        only: Optional[List[str]] = None,
+        skip: Optional[List[str]] = None,
+    ):
         self.target_dir = target_dir
         self.dry_run = dry_run
         self.verbose = verbose
+        self.only_set: Optional[Set[str]] = {x.lower().strip() for x in only} if only else None
+        self.skip_set: Set[str] = {x.lower().strip() for x in skip} if skip else set()
         self.results: List[Tuple[str, str, str]] = []
 
     def log(self, patch_name: str, status: str, detail: str = ""):
@@ -345,20 +393,37 @@ def telegram_bot_commands() -> list[tuple[str, str]]:
         return self.apply_file_patch("tools/approval.py", transform, "approval-low-tirith-warn-skip")
 
     # -------------------------------------------------------------
-    # Run All
+    # Execution Filter & Dispatch
     # -------------------------------------------------------------
+    def _is_patch_selected(self, patch_meta: dict) -> bool:
+        pid = patch_meta["id"]
+        names = {pid} | set(patch_meta.get("aliases", []))
+
+        # Check skip
+        if any(name in self.skip_set for name in names):
+            return False
+
+        # Check only
+        if self.only_set is not None:
+            return any(name in self.only_set for name in names)
+
+        return True
+
     def run_all(self):
         print(f"🚀 Running hermes-patches against: {self.target_dir}")
-        self.patch_runtime_footer()
-        self.patch_telegram_cjk_rich()
-        self.patch_telegram_menu_zh()
-        self.patch_state_db()
-        self.patch_approval_tirith()
+        for item in PATCH_REGISTRY:
+            if not self._is_patch_selected(item):
+                self.log(item["name"], "skipped", "excluded by --only / --skip")
+                continue
+            method_name = item["method"]
+            method = getattr(self, method_name, None)
+            if callable(method):
+                method()
 
         print("\n📋 Execution Summary:")
         for name, status, detail in self.results:
             d_str = f" ({detail})" if detail else ""
-            print(f"  • {name:<30} -> {status.upper()}{d_str}")
+            print(f"  • {name:<35} -> {status.upper()}{d_str}")
 
 
 def find_default_hermes_dir() -> Path:
@@ -375,18 +440,65 @@ def find_default_hermes_dir() -> Path:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Apply runtime enhancement patches to Hermes Agent.")
+    parser = argparse.ArgumentParser(
+        description="Apply non-intrusive runtime enhancement patches to Hermes Agent.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Apply all patches to default Hermes Agent installation
+  python3 hermes_patches.py
+
+  # Preview changes without modifying files (Dry Run)
+  python3 hermes_patches.py --dry-run -v
+
+  # Apply only Telegram rich table bypass and DB durability patches
+  python3 hermes_patches.py --only table db
+
+  # Apply all patches EXCEPT Telegram command menu translation
+  python3 hermes_patches.py --skip menu
+        """,
+    )
     parser.add_argument("--target", type=str, default="", help="Target Hermes Agent install directory")
     parser.add_argument("--dry-run", action="store_true", help="Inspect changes without writing to disk")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    parser.add_argument(
+        "--only",
+        nargs="+",
+        metavar="PATCH",
+        help="Apply only specified patches (e.g. footer, table, menu, db, tirith)",
+    )
+    parser.add_argument(
+        "--skip",
+        nargs="+",
+        metavar="PATCH",
+        help="Skip specified patches (e.g. menu, tirith)",
+    )
+    parser.add_argument("--list-patches", action="store_true", help="List all available patch modules and exit")
+
     args = parser.parse_args()
+
+    if args.list_patches:
+        print("🛠️ Available hermes-patches Modules:\n")
+        for p in PATCH_REGISTRY:
+            aliases = ", ".join(p["aliases"])
+            print(f"  • ID: {p['id']:<10} (Aliases: {aliases})")
+            print(f"    Name: {p['name']}")
+            print(f"    Desc: {p['description']}\n")
+        sys.exit(0)
 
     target = Path(args.target) if args.target else find_default_hermes_dir()
     if not (target / "hermes_state.py").is_file():
         print(f"❌ Error: Target directory '{target}' does not appear to be a valid Hermes Agent installation.", file=sys.stderr)
+        print("Please provide --target /path/to/hermes-agent or set HERMES_SOURCE_DIR.", file=sys.stderr)
         sys.exit(1)
 
-    engine = PatchEngine(target_dir=target, dry_run=args.dry_run, verbose=args.verbose)
+    engine = PatchEngine(
+        target_dir=target,
+        dry_run=args.dry_run,
+        verbose=args.verbose,
+        only=args.only,
+        skip=args.skip,
+    )
     engine.run_all()
 
 

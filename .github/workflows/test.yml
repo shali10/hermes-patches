@@ -23,14 +23,29 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/NousResearch/hermes-agent.git /tmp/hermes-agent
 
-      - name: Test Patch Injection Engine
+      - name: Test List Patches & Dry Run
+        run: |
+          python3 hermes_patches.py --list-patches
+          python3 hermes_patches.py --target /tmp/hermes-agent --dry-run -v
+
+      - name: Test Selective Patching (--only & --skip)
+        run: |
+          python3 hermes_patches.py --target /tmp/hermes-agent --dry-run --only table db -v
+          python3 hermes_patches.py --target /tmp/hermes-agent --dry-run --skip menu -v
+
+      - name: Apply All Patches
         run: |
           python3 hermes_patches.py --target /tmp/hermes-agent --verbose
 
-      - name: Verify Python Syntax
+      - name: Verify Python Syntax of Patched Files
         run: |
           python3 -m py_compile /tmp/hermes-agent/gateway/runtime_footer.py
           python3 -m py_compile /tmp/hermes-agent/gateway/run.py
           python3 -m py_compile /tmp/hermes-agent/plugins/platforms/telegram/adapter.py
+          python3 -m py_compile /tmp/hermes-agent/hermes_cli/commands.py
           python3 -m py_compile /tmp/hermes-agent/hermes_state.py
           python3 -m py_compile /tmp/hermes-agent/tools/approval.py
+
+      - name: Test Idempotency (Run Again)
+        run: |
+          python3 hermes_patches.py --target /tmp/hermes-agent --verbose
