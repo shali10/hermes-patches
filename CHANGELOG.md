@@ -5,6 +5,13 @@
 
 ---
 
+## [v1.3.5] - 2026-08-29
+
+### 🐛 关键修复 (Bug Fixes)
+- **Runtime Footer 全量计量注入修复**：修复 `patch_runtime_footer` 在修改 `build_footer_line` 签名时的条件误判 bug，确保 `build_footer_line` 完整接收 `prompt_tokens`、`output_tokens`、`cache_read_tokens`，彻底解决 Gateway 运行时因 `TypeError` 导致 Token 页脚静默吞噬的问题。
+- **一键配置自愈增强**：`ensure_runtime_config` 自动初始化 `display.final_response_markdown: keep`、`display.streaming: false` 与 `telegram.extra.allow_cjk_rich: true`，消除格式剥离与流式降级冲突。
+- **GitHub CDN 防缓存**：一键安装脚本管道注入 `nocache` 时间戳，杜绝 CDN 缓存引起的补丁延迟。
+
 ## [v1.3.4] - 2026-08-29
 
 ### 🛡️ 生产级守护加固与 systemd 重启自愈 (Systemd Service Hardening)
