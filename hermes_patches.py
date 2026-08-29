@@ -256,9 +256,9 @@ def format_runtime_footer('''
                 cand = cand.replace(old_model, new_model, 1)
 
             # 5. build_footer_line signature & invocation
-            old_bf_sig = "    turn_seconds: Optional[float] = None,\n) -> str:"
-            new_bf_sig = "    turn_seconds: Optional[float] = None,\n    prompt_tokens: Optional[int] = None,\n    output_tokens: Optional[int] = None,\n    cache_read_tokens: Optional[int] = None,\n) -> str:"
-            if "cache_read_tokens: Optional[int] = None,\n) -> str:" not in cand and old_bf_sig in cand:
+            old_bf_sig = "def build_footer_line(\n    *,\n    user_config: dict[str, Any] | None,\n    platform_key: str | None,\n    model: Optional[str],\n    context_tokens: int,\n    context_length: Optional[int],\n    cwd: Optional[str] = None,\n    turn_seconds: Optional[float] = None,\n) -> str:"
+            new_bf_sig = "def build_footer_line(\n    *,\n    user_config: dict[str, Any] | None,\n    platform_key: str | None,\n    model: Optional[str],\n    context_tokens: int,\n    context_length: Optional[int],\n    cwd: Optional[str] = None,\n    turn_seconds: Optional[float] = None,\n    prompt_tokens: Optional[int] = None,\n    output_tokens: Optional[int] = None,\n    cache_read_tokens: Optional[int] = None,\n    **kwargs: Any,\n) -> str:"
+            if old_bf_sig in cand:
                 cand = cand.replace(old_bf_sig, new_bf_sig, 1)
 
             old_bf_call = '        fields=cfg.get("fields") or _DEFAULT_FIELDS,\n    )'
