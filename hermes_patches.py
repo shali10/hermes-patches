@@ -278,22 +278,32 @@ def format_runtime_footer('''
             if target_extract in cand and '_cache_read_toks = getattr(_agent' not in cand:
                 cand = cand.replace(target_extract, replacement_extract)
 
-            # 3. Inject "cache_read_tokens": _cache_read_toks into return dicts
-            target_ret1 = '''                "input_tokens": _input_toks,
-                "output_tokens": _output_toks,'''
-            replacement_ret1 = '''                "input_tokens": _input_toks,
-                "output_tokens": _output_toks,
-                "cache_read_tokens": _cache_read_toks,'''
-            if target_ret1 in cand and '"cache_read_tokens": _cache_read_toks' not in cand:
-                cand = cand.replace(target_ret1, replacement_ret1)
+            # 3. Inject both return payloads independently and idempotently.
+            # A global `field not in cand` guard short-circuits the second
+            # return path after the first replacement.
+            ret1_pat = re.compile(
+                r'(?m)^( {16}"input_tokens": _input_toks,\n'
+                r' {16}"output_tokens": _output_toks,\n)'
+                r'(?! {16}"cache_read_tokens": _cache_read_toks,)'
+            )
+            ret1_replacement = (
+                '                "input_tokens": _input_toks,\n'
+                '                "output_tokens": _output_toks,\n'
+                '                "cache_read_tokens": _cache_read_toks,'
+            )
+            cand = ret1_pat.sub(ret1_replacement, cand, count=1)
 
-            target_ret2 = '''            "input_tokens": _input_toks,
-            "output_tokens": _output_toks,'''
-            replacement_ret2 = '''            "input_tokens": _input_toks,
-            "output_tokens": _output_toks,
-            "cache_read_tokens": _cache_read_toks,'''
-            if target_ret2 in cand and '"cache_read_tokens": _cache_read_toks' not in cand:
-                cand = cand.replace(target_ret2, replacement_ret2)
+            ret2_pat = re.compile(
+                r'(?m)^( {12}"input_tokens": _input_toks,\n'
+                r' {12}"output_tokens": _output_toks,\n)'
+                r'(?! {12}"cache_read_tokens": _cache_read_toks,)'
+            )
+            ret2_replacement = (
+                '            "input_tokens": _input_toks,\n'
+                '            "output_tokens": _output_toks,\n'
+                '            "cache_read_tokens": _cache_read_toks,'
+            )
+            cand = ret2_pat.sub(ret2_replacement, cand, count=1)
 
             # 4. Parameter injection into build_footer_line
             new_bfl = '''_footer_line = _bfl(

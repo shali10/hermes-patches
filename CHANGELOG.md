@@ -5,6 +5,17 @@
 
 ---
 
+## [v1.3.9] - 2026-08-29
+
+### 🐛 修复 Runtime Footer 双返回路径缓存字段注入短路
+- 修复 `transform_gateway_run` 使用全局 `cache_read_tokens not in cand` 判断，导致第一处 Payload 注入后第二处正常返回 Payload 被跳过的问题。
+- 改为按返回路径分别匹配、分别幂等注入，确保异常/空响应路径与正常成功路径均传递 `cache_read_tokens`。
+- 增加 CI 断言：两处 Payload 必须各包含一次缓存字段，提取逻辑只出现一次。
+- 已验证首次安装、重复安装、Python AST 编译均通过。
+
+---
+
+
 ## [v1.3.8] - 2026-08-29
 
 ### 🐛 关键修复：补齐网关层 Cache Read Token 传输链路 (Gateway Cache Read Ingestion Fix)

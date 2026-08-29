@@ -101,9 +101,13 @@ jobs:
           approval_code = Path('/tmp/hermes-agent/tools/approval.py').read_text(encoding='utf-8')
           assert '_skip_low_warn' in approval_code
 
-          # 6. Streaming Control
+          # 6. Streaming Control + Gateway cache-read transport
           run_code = Path('/tmp/hermes-agent/gateway/run.py').read_text(encoding='utf-8')
           assert '_global_display_streaming' in run_code
+          assert run_code.count('"cache_read_tokens": _cache_read_toks') == 2
+          assert run_code.count(
+              '_cache_read_toks = getattr(_agent, "session_cache_read_tokens", 0) or 0'
+          ) == 1
 
           # 7. Clean Thinking
           cli_code = Path('/tmp/hermes-agent/cli.py').read_text(encoding='utf-8')
