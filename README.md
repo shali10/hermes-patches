@@ -10,6 +10,18 @@
 
 ---
 
+## 📸 效果实测预览 (Showcase)
+
+### 1. 📑 Telegram 原生 Markdown Pipe Table 与全量 Token 页脚
+
+安装本补丁套件后，在 Telegram 客户端中输出 Markdown Pipe 表格与状态信息将**原生高保真呈现**：
+
+<p align="center">
+  <img src="docs/images/telegram_table_preview.png" alt="Telegram Markdown Pipe Table 原生富文本表格与页脚实测预览" width="760" />
+</p>
+
+---
+
 ## ✨ 核心特性一览
 
 | 模块 | 官方原生状态 | 安装 hermes-patches 后 ✨ |
@@ -22,9 +34,9 @@
 
 ---
 
-## 📸 效果对比展示 (Showcase)
+## 🔍 对比实测 (Before vs After)
 
-### 1. 📊 Token 消耗与缓存命中全透视 (Runtime Footer)
+### 📊 Token 消耗与缓存命中全透视 (Runtime Footer)
 
 * **官方默认精简页脚**：
   ```text
@@ -33,30 +45,12 @@
 
 * **安装补丁后全量页脚**：
   ```text
-  🤖 gemini-3.7-flash-high | 🧠 Prompt总量: 45,000 | 💾 缓存命中: 40,000 (89%) | 📤 输出: 150 | 🎯 上下文: 4% | ⏱️ 耗时: 3.2s
+  🤖 gemini-3.7-flash-high | 🧠 Prompt总量: 45,210 | 💾 缓存命中: 40,000 (88%) | 📤 输出: 280 | 🎯 上下文: 4% | ⏱️ 耗时: 3.2s
   ```
 
 ---
 
-### 2. 📑 Telegram 原生 Markdown Pipe Table 渲染测试
-
-安装补丁后，在 Telegram 客户端中输出 Markdown Pipe 表格将**原生高保真呈现**：
-
-```markdown
-| 节点资产 | 部署服务 | 实时负载 | 运行状态 | 延迟 (ms) |
-|:---|:---|:---:|:---:|---:|
-| **hytron** | Hermes Agent Gateway | `0.12` | `ONLINE` 🟢 | 12 ms |
-| **raksmart** | 1Panel / Halo 博客矩阵 | `0.28` | `ONLINE` 🟢 | 45 ms |
-| **cloudnium** | CPA Gemini 专用出口中转 | `0.05` | `IDLE` 🟡 | 18 ms |
-| **London** | 异地冷备与快照仓库 | `0.01` | `STANDBY` ⚪ | 110 ms |
-```
-
-> 💡 **Telegram 客户端实测渲染效果**：
-> 表格自动适应屏幕宽度，具备独立列对齐、表头高亮与单元格边框，阅读体验提升 10 倍！
-
----
-
-### 3. 🇨🇳 Telegram 快捷命令中文菜单
+### 🇨🇳 Telegram 快捷命令中文菜单
 
 客户端输入 `/` 时弹出的官方菜单已全量本地化：
 
