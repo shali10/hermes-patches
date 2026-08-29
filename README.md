@@ -10,18 +10,6 @@
 
 ---
 
-## 📸 效果实测预览 (Showcase)
-
-### 1. 📑 Telegram 原生 Markdown Pipe Table 与全量 Token 页脚
-
-安装本补丁套件后，在 Telegram 客户端中输出 Markdown Pipe 表格与状态信息将**原生高保真呈现**：
-
-<p align="center">
-  <img src="docs/images/telegram_table_preview.png" alt="Telegram Markdown Pipe Table 原生富文本表格与页脚实测预览" width="760" />
-</p>
-
----
-
 ## ✨ 核心特性一览
 
 | 模块 | 官方原生状态 | 安装 hermes-patches 后 ✨ |
@@ -34,9 +22,9 @@
 
 ---
 
-## 🔍 对比实测 (Before vs After)
+## 🔍 功能实测与展示 (Showcase)
 
-### 📊 Token 消耗与缓存命中全透视 (Runtime Footer)
+### 1. 📊 Token 消耗与缓存命中全透视 (Runtime Footer)
 
 * **官方默认精简页脚**：
   ```text
@@ -50,7 +38,26 @@
 
 ---
 
-### 🇨🇳 Telegram 快捷命令中文菜单
+### 2. 📑 Telegram 原生 Markdown Pipe Table 渲染效果
+
+安装补丁后，在 Telegram 客户端中输出 Markdown Pipe 表格将**原生高保真呈现**：
+
+<p align="center">
+  <img src="docs/images/telegram_pipe_table_demo.png" alt="Telegram Markdown Pipe Table 原生富文本表格与页脚实测演示" width="760" />
+</p>
+
+```markdown
+| 模型名称 | 上下文窗口 | 推理能力 | 特性标签 | 首字延迟 |
+|:---|:---|:---:|:---:|---:|
+| **Gemini 2.5 Flash** | `1,000,000` | 极高 | ⚡ ULTRA-FAST | 0.32s |
+| **Claude 3.7 Sonnet** | `200,000` | 卓越 | 🧠 REASONING | 0.58s |
+| **DeepSeek-V3** | `64,000` | 优秀 | 💰 COST-EFFICIENT | 0.75s |
+| **GPT-4o** | `128,000` | 卓越 | 🌐 MULTIMODAL | 0.45s |
+```
+
+---
+
+### 3. 🇨🇳 Telegram 快捷命令中文菜单
 
 客户端输入 `/` 时弹出的官方菜单已全量本地化：
 
