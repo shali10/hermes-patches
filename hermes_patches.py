@@ -81,6 +81,13 @@ PATCH_REGISTRY = [
         "method": "patch_smart_split",
         "description": "4096+ 字符长消息优先在自然段落 (\\n\\n) 边界切分，自动补齐代码围栏与表格结构。",
     },
+    {
+        "id": "terminal-cwd",
+        "aliases": ["cwd", "terminal", "deleted-workdir", "cwd-recovery"],
+        "name": "📁 Terminal 失效工作目录自动回退",
+        "method": "patch_terminal_cwd_recovery",
+        "description": "显式 workdir 被删除后，在构建命令 wrapper 前回退到可用父目录，避免 exit 126。",
+    },
 ]
 
 
@@ -145,13 +152,18 @@ class PatchEngine:
             self.log(patch_name, "dry-run", "代码变更预检通过，等待写入")
             return True
 
-        # Backup original
-        bak_file = target_file.with_suffix(target_file.suffix + ".bak")
-        if not bak_file.exists():
-            try:
-                shutil.copy2(target_file, bak_file)
-            except Exception:
-                pass
+        # Backup original outside the source tree so upgrades and git status stay clean.
+        backup_root = Path(os.environ.get("HERMES_HOME", "/root/.hermes")) / ".backup" / "local-patches"
+        backup_root.mkdir(parents=True, exist_ok=True)
+        backup_name = rel_path.replace("/", "__") + f".bak.{int(time.time())}"
+        bak_file = backup_root / backup_name
+        try:
+            shutil.copy2(target_file, bak_file)
+            siblings = sorted(backup_root.glob(rel_path.replace("/", "__") + ".bak.*"), key=lambda p: p.stat().st_mtime, reverse=True)
+            for old_backup in siblings[3:]:
+                old_backup.unlink(missing_ok=True)
+        except Exception:
+            pass
 
         # Write to temporary file and compile test
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, dir=target_file.parent, suffix=".py") as temp:
@@ -278,32 +290,26 @@ def format_runtime_footer('''
             if target_extract in cand and '_cache_read_toks = getattr(_agent' not in cand:
                 cand = cand.replace(target_extract, replacement_extract)
 
-            # 3. Inject both return payloads independently and idempotently.
-            # A global `field not in cand` guard short-circuits the second
-            # return path after the first replacement.
-            ret1_pat = re.compile(
-                r'(?m)^( {16}"input_tokens": _input_toks,\n'
-                r' {16}"output_tokens": _output_toks,\n)'
-                r'(?! {16}"cache_read_tokens": _cache_read_toks,)'
-            )
-            ret1_replacement = (
-                '                "input_tokens": _input_toks,\n'
-                '                "output_tokens": _output_toks,\n'
-                '                "cache_read_tokens": _cache_read_toks,'
-            )
-            cand = ret1_pat.sub(ret1_replacement, cand, count=1)
+            # 3. Inject "cache_read_tokens": _cache_read_toks into return dicts
+            target_ret1 = '''                "input_tokens": _input_toks,
+                "output_tokens": _output_toks,'''
+            replacement_ret1 = '''                "input_tokens": _input_toks,
+                "output_tokens": _output_toks,
+                "cache_read_tokens": _cache_read_toks,'''
+            if target_ret1 in cand and '"cache_read_tokens": _cache_read_toks' not in cand:
+                cand = cand.replace(target_ret1, replacement_ret1)
 
-            ret2_pat = re.compile(
-                r'(?m)^( {12}"input_tokens": _input_toks,\n'
-                r' {12}"output_tokens": _output_toks,\n)'
-                r'(?! {12}"cache_read_tokens": _cache_read_toks,)'
-            )
-            ret2_replacement = (
-                '            "input_tokens": _input_toks,\n'
-                '            "output_tokens": _output_toks,\n'
-                '            "cache_read_tokens": _cache_read_toks,'
-            )
-            cand = ret2_pat.sub(ret2_replacement, cand, count=1)
+            target_ret2 = '''            "last_prompt_tokens": _last_prompt_toks,
+            "input_tokens": _input_toks,
+            "output_tokens": _output_toks,
+            "model": _resolved_model,'''
+            replacement_ret2 = '''            "last_prompt_tokens": _last_prompt_toks,
+            "input_tokens": _input_toks,
+            "output_tokens": _output_toks,
+            "cache_read_tokens": _cache_read_toks,
+            "model": _resolved_model,'''
+            if target_ret2 in cand:
+                cand = cand.replace(target_ret2, replacement_ret2, 1)
 
             # 4. Parameter injection into build_footer_line
             new_bfl = '''_footer_line = _bfl(
@@ -339,9 +345,132 @@ def format_runtime_footer('''
 
             return cand
 
+        def transform_usage_pricing(src: str) -> str:
+            cand = src
+            if "cached_content_token_count" in cand:
+                return cand
+            
+            old_kw = """        if not cache_read_tokens:
+            # Kimi/Moonshot's native API (api.moonshot.cn / .ai) reports
+            # context-cache hits as a top-level usage.cached_tokens, not the
+            # OpenAI nested prompt_tokens_details.cached_tokens shape. Without
+            # this, direct Kimi sessions always showed 0 cache-hit tokens and
+            # the hits were billed at the full input rate (#65722).
+            cache_read_tokens = _usage_count(
+                _usage_get(response_usage, "cached_tokens", 0)
+            )"""
+            
+            new_kw = """        if not cache_read_tokens:
+            # Kimi/Moonshot's native API (api.moonshot.cn / .ai) reports
+            # context-cache hits as a top-level usage.cached_tokens, not the
+            # OpenAI nested prompt_tokens_details.cached_tokens shape. Without
+            # this, direct Kimi sessions always showed 0 cache-hit tokens and
+            # the hits were billed at the full input rate (#65722).
+            cache_read_tokens = _usage_count(
+                _usage_get(response_usage, "cached_tokens", 0)
+            )
+        if not cache_read_tokens:
+            cache_read_tokens = _usage_count(
+                _usage_get(response_usage, "cached_content_token_count", 0)
+            )
+        if not cache_read_tokens:
+            cache_read_tokens = _usage_count(
+                _usage_get(response_usage, "cachedContentTokenCount", 0)
+            )
+        if not cache_read_tokens:
+            cache_read_tokens = _usage_count(
+                _usage_get(response_usage, "cached_prompt_tokens", 0)
+            )
+        if not cache_read_tokens and details:
+            cache_read_tokens = _usage_count(
+                _usage_get(details, "cache_read_tokens", 0)
+            ) or _usage_count(
+                _usage_get(details, "cached_content_token_count", 0)
+            ) or _usage_count(
+                _usage_get(details, "cached_prompt_tokens", 0)
+            )"""
+            
+            if old_kw in cand:
+                cand = cand.replace(old_kw, new_kw, 1)
+            return cand
+
+        def transform_conversation_loop(src: str) -> str:
+            cand = src
+            if "# Initialize base prompt cache tokens from previous conversation history" in cand and "from agent.usage_pricing import CanonicalUsage" in cand:
+                return cand
+            
+            # 1. Base initialization from conversation_history in run_conversation
+            base_anchor = """    agent._last_compaction_in_place = False
+    agent._last_compression_attempt_recorded = False
+    agent._last_compression_attempt_in_place = None"""
+
+            base_init = """    agent._last_compaction_in_place = False
+    agent._last_compression_attempt_recorded = False
+    agent._last_compression_attempt_in_place = None
+    # Initialize base prompt cache tokens from previous conversation history
+    if conversation_history:
+        try:
+            from agent.model_metadata import estimate_request_tokens_rough
+            _tools = getattr(agent, "tools", None) or None
+            _sys = getattr(agent, "_cached_system_prompt", "") or getattr(agent, "system_prompt", "") or ""
+            agent._session_base_prompt_tokens = estimate_request_tokens_rough(
+                conversation_history, system_prompt=_sys, tools=_tools
+            )
+        except Exception:
+            agent._session_base_prompt_tokens = 0
+    else:
+        agent._session_base_prompt_tokens = 0
+    agent._last_iter_prompt_tokens = 0"""
+
+            if base_anchor in cand and "# Initialize base prompt cache tokens from previous conversation history" not in cand:
+                cand = cand.replace(base_anchor, base_init, 1)
+
+            # 2. Immutable CanonicalUsage reconstruction on cache derivation
+            old_norm = """                if hasattr(response, 'usage') and response.usage:
+                    canonical_usage = normalize_usage(
+                        response.usage,
+                        provider=agent.provider,
+                        api_mode=agent.api_mode,
+                    )"""
+                    
+            new_norm = """                if hasattr(response, 'usage') and response.usage:
+                    canonical_usage = normalize_usage(
+                        response.usage,
+                        provider=agent.provider,
+                        api_mode=agent.api_mode,
+                    )
+                    # Adaptive prompt cache derivation when upstream proxy/provider omits cache stats
+                    if canonical_usage.cache_read_tokens == 0:
+                        _p_raw = canonical_usage.prompt_tokens or getattr(response.usage, "prompt_tokens", 0) or getattr(response.usage, "input_tokens", 0)
+                        _prev_p = getattr(agent, "_last_iter_prompt_tokens", 0) or getattr(agent, "_session_base_prompt_tokens", 0) or 0
+                        if _prev_p > 0 and _p_raw >= _prev_p:
+                            from agent.usage_pricing import CanonicalUsage
+                            _inf_cache = min(_p_raw, _prev_p)
+                            canonical_usage = CanonicalUsage(
+                                input_tokens=max(0, _p_raw - _inf_cache),
+                                output_tokens=canonical_usage.output_tokens,
+                                cache_read_tokens=_inf_cache,
+                                cache_write_tokens=canonical_usage.cache_write_tokens,
+                                reasoning_tokens=canonical_usage.reasoning_tokens,
+                                request_count=canonical_usage.request_count,
+                                raw_usage=canonical_usage.raw_usage,
+                            )
+                    agent._last_iter_prompt_tokens = canonical_usage.prompt_tokens
+                    agent._session_base_prompt_tokens = canonical_usage.prompt_tokens"""
+
+            # Replace either the clean original or the previous patch iteration
+            if old_norm in cand:
+                cand = cand.replace(old_norm, new_norm, 1)
+            elif "# Adaptive prompt cache derivation when upstream proxy/provider omits cache stats" in cand:
+                pat = r"if hasattr\(response, 'usage'\) and response\.usage:\s+canonical_usage = normalize_usage\(.*?agent\._session_base_prompt_tokens = canonical_usage\.prompt_tokens"
+                cand = re.sub(pat, new_norm.strip(), cand, count=1, flags=re.DOTALL)
+            return cand
+
         ok1 = self.apply_file_patch("gateway/runtime_footer.py", transform_footer, "📊 Runtime Footer 全量计量")
         ok2 = self.apply_file_patch("gateway/run.py", transform_gateway_run, "⚙️ Gateway 运行态参数注入")
-        return ok1 and ok2
+        ok3 = self.apply_file_patch("agent/usage_pricing.py", transform_usage_pricing, "🧠 多模型厂商全字段缓存解析")
+        ok4 = self.apply_file_patch("agent/conversation_loop.py", transform_conversation_loop, "⚡ 代理会话级智能前缀缓存补齐")
+        return ok1 and ok2 and ok3 and ok4
 
     # -------------------------------------------------------------
     # Patch 2: Telegram CJK Native Rich Formatting & Table Bypass
@@ -505,11 +634,21 @@ def format_runtime_footer('''
             if old_ghl in cand:
                 cand = cand.replace(old_ghl, new_ghl, 1)
 
-            # 3. Update telegram_bot_commands
+            # 3. Localize telegram_bot_commands while preserving the current
+            # registry-derived implementation. Never replace the function with
+            # a stale snapshot such as _RAW_TELEGRAM_BOT_COMMANDS (removed
+            # upstream), which breaks command-menu registration at runtime.
             old_tg_append = '            result.append((tg_name, cmd.description))'
             new_tg_append = '            result.append((tg_name, _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, cmd.description)))'
             if old_tg_append in cand:
                 cand = cand.replace(old_tg_append, new_tg_append, 1)
+
+            old_command_append = '            result.append((tg_name, command.description))'
+            new_command_append = '''            result.append(
+                (tg_name, _TELEGRAM_ZH_DESCRIPTIONS.get(command.name, command.description))
+            )'''
+            if old_command_append in cand:
+                cand = cand.replace(old_command_append, new_command_append, 1)
 
             old_plugin_append = '            result.append((tg_name, description))'
             new_plugin_append = '            result.append((tg_name, _TELEGRAM_ZH_DESCRIPTIONS.get(name, description)))'
@@ -726,6 +865,51 @@ def format_runtime_footer('''
             return cand
 
         return self.apply_file_patch("gateway/platforms/base.py", transform_base_platform, "✂️ Telegram 4096 智能段落切分")
+
+    # -------------------------------------------------------------
+    # Patch 9: Local terminal explicit cwd recovery
+    # -------------------------------------------------------------
+    def patch_terminal_cwd_recovery(self) -> bool:
+        def transform_base_env(src: str) -> str:
+            marker = "# hermes-patches terminal-cwd-recovery"
+            if marker in src:
+                return src
+            old = """        effective_timeout = timeout or self.timeout
+        effective_cwd = cwd or self.cwd
+
+        # Merge sudo stdin with caller stdin"""
+            new = """        effective_timeout = timeout or self.timeout
+        effective_cwd = cwd or self.cwd
+        # hermes-patches terminal-cwd-recovery
+        # Explicit per-command workdirs can be deleted after routing records
+        # them. Resolve a safe local ancestor before _wrap_command emits cd;
+        # LocalEnvironment's Popen-only recovery is otherwise too late.
+        if self.is_local:
+            try:
+                from tools.environments.local import _resolve_safe_cwd
+                effective_cwd = _resolve_safe_cwd(effective_cwd)
+            except Exception:
+                logger.debug(\"Could not resolve safe local command cwd\", exc_info=True)
+
+        # Merge sudo stdin with caller stdin"""
+            if old in src:
+                return src.replace(old, new, 1)
+            # Current production source may already contain the equivalent fix
+            # without the persistence marker; tag it idempotently.
+            existing = """        if self.is_local:
+            try:
+                from tools.environments.local import _resolve_safe_cwd
+
+                effective_cwd = _resolve_safe_cwd(effective_cwd)"""
+            if existing in src:
+                return src.replace("        if self.is_local:\n", f"        {marker}\n        if self.is_local:\n", 1)
+            return src
+
+        return self.apply_file_patch(
+            "tools/environments/base.py",
+            transform_base_env,
+            "📁 Terminal 失效工作目录自动回退",
+        )
 
     # -------------------------------------------------------------
     # Execution Filter & Dispatch

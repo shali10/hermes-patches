@@ -5,6 +5,22 @@
 
 ---
 
+## [v1.4.0] - 2026-09-02
+
+### ⚡ 核心增强：多厂商全字段缓存解析与代理会话级智能前缀推导 (Adaptive Cache & Multi-Vendor Ingestion)
+- **多模型/中转全字段缓存解析（`agent/usage_pricing.py`）**：
+  - 补齐 Google / Gemini 原生 `cached_content_token_count` 与 `cachedContentTokenCount` 解析；
+  - 补齐 vLLM / LiteLLM 的 `cached_prompt_tokens`；
+  - 补齐 OpenAI `details` 对象内多种别名形式的缓存命中解析。
+- **代理会话级智能前缀缓存推导（`agent/conversation_loop.py`）**：
+  - 当第三方中转代理（如 CPA、自建反代等）漏传 `cached_tokens` 时，自动基于多轮历史会话及工具调用链的前缀基线智能推导真实前缀缓存命中数与百分比，彻底消除假 0。
+- **修复 Gateway 正常响应字典 `cache_read_tokens` 键缺失缺陷（`gateway/run.py`）**：
+  - 补齐正常响应返回字典中的 `cache_read_tokens` 字段，打通最后一公里数据传输。
+- **新增 `terminal-cwd` 补丁（`tools/environments/base.py`）**：
+  - 显式 workdir 被删除后，在构建命令 wrapper 前回退到可用父目录，避免 exit 126。
+
+---
+
 ## [v1.3.9] - 2026-08-29
 
 ### 🐛 修复 Runtime Footer 双返回路径缓存字段注入短路
