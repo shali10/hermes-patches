@@ -153,11 +153,12 @@ class PatchEngine:
             return True
 
         # Backup original outside the source tree so upgrades and git status stay clean.
-        backup_root = Path(os.environ.get("HERMES_HOME", "/root/.hermes")) / ".backup" / "local-patches"
-        backup_root.mkdir(parents=True, exist_ok=True)
-        backup_name = rel_path.replace("/", "__") + f".bak.{int(time.time())}"
-        bak_file = backup_root / backup_name
         try:
+            backup_home = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+            backup_root = backup_home / ".backup" / "local-patches"
+            backup_root.mkdir(parents=True, exist_ok=True)
+            backup_name = rel_path.replace("/", "__") + f".bak.{int(time.time())}"
+            bak_file = backup_root / backup_name
             shutil.copy2(target_file, bak_file)
             siblings = sorted(backup_root.glob(rel_path.replace("/", "__") + ".bak.*"), key=lambda p: p.stat().st_mtime, reverse=True)
             for old_backup in siblings[3:]:
