@@ -6,18 +6,78 @@ and produce the expected behavioral changes and signatures.
 """
 
 import argparse
+import os
+import subprocess
 import sys
 from pathlib import Path
 
 
+def detect_target_dir(explicit_target: str = None) -> Path:
+    if explicit_target:
+        p = Path(explicit_target).resolve()
+        if p.is_dir():
+            return p
+
+    # 1. Check environment variables
+    for env_k in ["HERMES_PATCH_SOURCE_ROOT", "HERMES_AGENT_ROOT", "HERMES_SOURCE_DIR", "HERMES_DIR", "HERMES_HOME"]:
+        val = os.environ.get(env_k)
+        if val:
+            p = Path(val).resolve()
+            if p.is_dir() and (p / "hermes_state.py").is_file():
+                return p
+
+    # 2. Check running processes
+    try:
+        ps_out = subprocess.check_output(["ps", "-eo", "command"], text=True, errors="ignore")
+        for line in ps_out.splitlines():
+            if "grep" in line or "test_behavior" in line:
+                continue
+            if any(k in line for k in ["hermes_cli", "gateway.run", "run_agent.py"]):
+                py_bin = line.strip().split()[0]
+                cand = subprocess.check_output(
+                    [py_bin, "-c", "import hermes_state, os; print(os.path.dirname(os.path.abspath(hermes_state.__file__)))"],
+                    text=True, stderr=subprocess.DEVNULL
+                ).strip()
+                if cand and Path(cand).is_dir() and (Path(cand) / "hermes_state.py").is_file():
+                    return Path(cand)
+    except Exception:
+        pass
+
+    # 3. Standard candidate paths
+    candidates = [
+        "/usr/local/lib/hermes-agent",
+        "/opt/hermes-agent",
+        Path.home() / ".local/lib/hermes-agent",
+        Path.home() / ".local/share/hermes-agent",
+        Path.home() / ".hermes/hermes-agent",
+        Path.home() / "hermes-agent",
+        "/tmp/hermes-agent",
+    ]
+    for c in candidates:
+        p = Path(c).resolve()
+        if p.is_dir() and (p / "hermes_state.py").is_file():
+            return p
+
+    tmp_p = Path("/tmp/hermes-agent").resolve()
+    if tmp_p.is_dir():
+        return tmp_p
+
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description="hermes-patches runtime behavioral assertions")
-    parser.add_argument("--target", default="/tmp/hermes-agent", help="Path to patched hermes-agent directory")
+    parser.add_argument("--target", default=None, help="Path to patched hermes-agent directory (auto-detected if omitted)")
     args = parser.parse_args()
 
-    target_dir = Path(args.target).resolve()
-    if not target_dir.is_dir():
-        print(f"Error: Target directory does not exist: {target_dir}", file=sys.stderr)
+    target_dir = detect_target_dir(args.target)
+    if not target_dir or not target_dir.is_dir():
+        print(
+            "Error: Could not locate a valid hermes-agent directory.\\n"
+            "Checked locations: /usr/local/lib/hermes-agent, /opt/hermes-agent, ~/.local/lib/hermes-agent, /tmp/hermes-agent\\n"
+            "Please specify the path using --target <path> or export HERMES_PATCH_SOURCE_ROOT=<path>",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     sys.path.insert(0, str(target_dir))

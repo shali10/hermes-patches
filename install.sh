@@ -218,11 +218,47 @@ EOF
     fi
 }
 
+# 守护进程状态探测与热重载提示
+detect_and_report_daemon() {
+    echo -e "${BOLD}${CYAN}-----------------------------------------------------${NC}"
+    echo -e "${BOLD}📡 网关守护状态探测与热重载诊断：${NC}"
+
+    local is_systemd=false
+    if command -v systemctl >/dev/null 2>&1 && systemctl status hermes-gateway >/dev/null 2>&1; then
+        is_systemd=true
+        local svc_active
+        svc_active=$(systemctl is-active hermes-gateway 2>/dev/null || echo "unknown")
+        if [ "$svc_active" = "active" ]; then
+            echo -e "  • Systemd 服务: ${GREEN}hermes-gateway.service 正在运行中 (active)${NC}"
+        else
+            echo -e "  • Systemd 服务: ${YELLOW}hermes-gateway.service 状态: ${svc_active}${NC}"
+        fi
+    fi
+
+    local proc_count
+    proc_count=$(ps -eo pid,command 2>/dev/null | grep -E "(gateway\.run|hermes_cli|run_agent\.py)" | grep -v grep | wc -l || echo 0)
+    if [ "$proc_count" -gt 0 ]; then
+        echo -e "  • 活跃进程: ${GREEN}检测到 ${proc_count} 个 Hermes 网关/运行进程${NC}"
+        echo -e "  • 重载建议: ${BOLD}如当前连接在 Telegram，可直接发送 ${CYAN}/restart${NC}${BOLD} 触发热重载${NC}"
+    else
+        echo -e "  • 活跃进程: 未检测到正在运行的前台网关进程"
+        if [ "$is_systemd" = true ]; then
+            echo -e "  • 启动建议: 可执行 ${CYAN}systemctl start hermes-gateway${NC} 启动网关"
+        fi
+    fi
+    echo -e "${BOLD}${CYAN}-----------------------------------------------------${NC}"
+}
+
 # If CLI arguments are provided, bypass interactive menu and execute directly
 if [ "$#" -gt 0 ]; then
     for arg in "$@"; do
         if [ "$arg" == "--list-patches" ] || [ "$arg" == "-h" ] || [ "$arg" == "--help" ]; then
             "$PYTHON_BIN" "$PATCH_SCRIPT" "$@"
+            exit 0
+        fi
+        if [ "$arg" == "--test" ]; then
+            echo -e "${BOLD}${BLUE}=== 运行 hermes-patches 行为断言测试套件 ===${NC}"
+            "$PYTHON_BIN" "$SCRIPT_DIR/tests/test_behavior.py" --target "$HERMES_DIR"
             exit 0
         fi
     done
@@ -241,7 +277,8 @@ if [ "$#" -gt 0 ]; then
     setup_systemd_hook
     "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --auto-config --restart "$@"
 
-    echo -e "\n${BOLD}${GREEN}🎉 补丁操作执行完毕，已全量生效！${NC}\n"
+    echo -e "\n${BOLD}${GREEN}🎉 补丁操作执行完毕！${NC}\n"
+    detect_and_report_daemon
     exit 0
 fi
 
@@ -267,6 +304,7 @@ show_menu() {
     echo -e " ---------------------------------------------------"
     echo -e " [10] 🔍 预览变更 (Dry Run，不写入磁盘)"
     echo -e " [11] ↩️ 卸载补丁并无损还原 (.bak 原生回滚)"
+    echo -e " [12] 🧪 运行运行时行为断言测试套件 (Behavior Test)"
     echo -e " [0]  🚪 退出脚本"
     echo -e "${BOLD}${CYAN}=====================================================${NC}"
 }
@@ -316,6 +354,11 @@ case "$CHOICE" in
     11)
         do_uninstall
         ;;
+    12)
+        echo -e "${BOLD}${BLUE}=== 运行 hermes-patches 行为断言测试套件 ===${NC}\n"
+        "$PYTHON_BIN" "$SCRIPT_DIR/tests/test_behavior.py" --target "$HERMES_DIR"
+        exit 0
+        ;;
     0)
         echo -e "${YELLOW}已退出操作。${NC}"
         exit 0
@@ -344,3 +387,4 @@ case "$CHOICE" in
 esac
 
 echo -e "\n${BOLD}${GREEN}🎉 补丁操作已全部完成并实时生效！${NC}\n"
+detect_and_report_daemon
