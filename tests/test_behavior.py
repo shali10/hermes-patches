@@ -80,6 +80,7 @@ def main():
     print("Testing 5/8: Tirith Low-Severity Approval...")
     approval_code = (target_dir / "tools/approval.py").read_text(encoding="utf-8")
     assert "_skip_low_warn" in approval_code, "_skip_low_warn missing in tools/approval.py"
+    assert 'return {"approved": True, "message": None}' in approval_code, "Dict return contract missing in _skip_low_warn"
 
     # -------------------------------------------------------------
     # 6. Streaming Control + Gateway cache-read transport

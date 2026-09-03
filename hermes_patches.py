@@ -734,7 +734,7 @@ def format_runtime_footer('''
             and all(str(f.get("severity", "")).upper() in {"LOW", "INFO", ""} for f in findings)
         )
         if _skip_low_warn:
-            return True, ""
+            return {"approved": True, "message": None}
         rule_id = findings[0].get("rule_id", "unknown") if findings else "unknown"'''
 
             if old_check in cand:
