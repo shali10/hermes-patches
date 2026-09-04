@@ -23,6 +23,8 @@ import time
 from pathlib import Path
 from typing import Callable, List, Optional, Set, Tuple
 
+__version__ = "1.4.0"
+
 
 PATCH_REGISTRY = [
     {
@@ -1285,16 +1287,24 @@ def main():
   python3 hermes_patches.py --skip menu
         """,
     )
+    parser.add_argument(
+        "--version",
+        "-V",
+        action="version",
+        version=f"%(prog)s {__version__}",
+        help="显示当前版本号并退出",
+    )
     parser.add_argument("--target", type=str, default="", help="指定 Hermes Agent 源码安装目录")
     parser.add_argument("--dry-run", action="store_true", help="预检模式：仅检查变更，不修改磁盘文件")
     parser.add_argument("--verbose", "-v", action="store_true", help="输出详细执行日志")
     parser.add_argument("--auto-config", action="store_true", help="自动校验并开启 ~/.hermes/config.yaml 中的页脚与计量显示")
     parser.add_argument("--restart", action="store_true", help="打完补丁后自动平滑重启 hermes-gateway 服务")
+    parser.add_argument("--all", action="store_true", help="显式指定应用全部增强补丁 (默认即为全量应用)")
     parser.add_argument(
         "--only",
         nargs="+",
         metavar="PATCH",
-        help="仅应用指定的补丁模块 (如 footer, table, menu, db, tirith, nostream, clean-think, smart-split)",
+        help="仅应用指定的补丁模块 (如 footer, table, menu, db, tirith, nostream, clean-think, smart-split, terminal-cwd)",
     )
     parser.add_argument(
         "--skip",

@@ -288,7 +288,7 @@ fi
 show_menu() {
     clear 2>/dev/null || true
     echo -e "${BOLD}${CYAN}=====================================================${NC}"
-    echo -e "${BOLD}${BLUE}   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.3.9)   ${NC}"
+    echo -e "${BOLD}${BLUE}   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.4.0)   ${NC}"
     echo -e "${BOLD}${CYAN}=====================================================${NC}"
     echo -e " 目标路径: ${GREEN}${HERMES_DIR}${NC}\n"
     echo -e " ${BOLD}${GREEN}[1] 🚀 全量一键安装、自动配置并平滑重启 (推荐 / 直接回车)${NC}"
@@ -301,10 +301,11 @@ show_menu() {
     echo -e " [7] 🚫 流式输出静默控制与 429 频控防护"
     echo -e " [8] 🧠 全链路深度思考过程强力净化"
     echo -e " [9] ✂️ Telegram 4096 长消息智能段落切分"
+    echo -e " [10] 📁 Terminal 失效工作目录自动回退"
     echo -e " ---------------------------------------------------"
-    echo -e " [10] 🔍 预览变更 (Dry Run，不写入磁盘)"
-    echo -e " [11] ↩️ 卸载补丁并无损还原 (.bak 原生回滚)"
-    echo -e " [12] 🧪 运行运行时行为断言测试套件 (Behavior Test)"
+    echo -e " [11] 🔍 预览变更 (Dry Run，不写入磁盘)"
+    echo -e " [12] ↩️ 卸载补丁并无损还原 (.bak 原生回滚)"
+    echo -e " [13] 🧪 运行运行时行为断言测试套件 (Behavior Test)"
     echo -e " [0]  🚪 退出脚本"
     echo -e "${BOLD}${CYAN}=====================================================${NC}"
 }
@@ -336,6 +337,7 @@ map_num_to_patch() {
         7) echo "nostream" ;;
         8) echo "clean-think" ;;
         9) echo "smart-split" ;;
+        10) echo "terminal-cwd" ;;
         *) echo "" ;;
     esac
 }
@@ -346,15 +348,15 @@ case "$CHOICE" in
         setup_systemd_hook
         "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --auto-config --restart --verbose
         ;;
-    10)
+    11)
         echo -e "${YELLOW}正在执行 Dry-Run 预检分析...${NC}\n"
         "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --dry-run --verbose
         exit 0
         ;;
-    11)
+    12)
         do_uninstall
         ;;
-    12)
+    13)
         echo -e "${BOLD}${BLUE}=== 运行 hermes-patches 行为断言测试套件 ===${NC}\n"
         "$PYTHON_BIN" "$SCRIPT_DIR/tests/test_behavior.py" --target "$HERMES_DIR"
         exit 0

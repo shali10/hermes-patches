@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-patches"
+version = "1.4.0"
+description = "Non-intrusive Turnkey Production Enhancement Patches for Hermes Agent"
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "shali10" }
+]
+requires-python = ">=3.10"
+keywords = [
+    "hermes-agent",
+    "patches",
+    "telegram",
+    "token-metering",
+    "durability",
+    "streaming"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Communications :: Chat",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/shali10/hermes-patches"
+Repository = "https://github.com/shali10/hermes-patches.git"
+Issues = "https://github.com/shali10/hermes-patches/issues"
+Changelog = "https://github.com/shali10/hermes-patches/blob/main/CHANGELOG.md"
+
+[project.scripts]
+hermes-patches = "hermes_patches:main"
+
+[tool.setuptools]
+py-modules = ["hermes_patches"]

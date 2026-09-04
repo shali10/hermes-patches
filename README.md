@@ -1,7 +1,7 @@
 # 🛠️ Hermes Patches
 
 > **Non-intrusive Turnkey Production Enhancement Patches for Hermes Agent**  
-> 给 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 插上全功能之翼 —— **Token 消耗精准计量、Telegram 原生富文本表格放行、中文菜单汉化、生产级 SQLite 锁死与外键自愈、低风险审批免打扰、流式静默控制与 429 频控护盾、全链路深度思考净化、4096 超长消息智能排版切分、零配置自动初始化与一键平滑重启**。
+> 给 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 插上全功能之翼 —— **Token 消耗精准计量、Telegram 原生富文本表格放行、中文菜单汉化、生产级 SQLite 锁死与外键自愈、低风险审批免打扰、流式静默控制与 429 频控护盾、全链路深度思考净化、4096 超长消息智能排版切分、失效工作目录自动回退、零配置自动初始化与一键平滑重启**。
 
 <p align="center">
   <a href="README_EN.md"><b>English</b></a> | <b>简体中文</b> | <a href="CHANGELOG.md"><b>📝 更新日志 (Changelog)</b></a> | <a href="https://github.com/shali10/hermes-patches/releases"><b>🏷️ Releases</b></a>
@@ -9,7 +9,8 @@
 
 <p align="center">
   <a href="https://github.com/shali10/hermes-patches/releases"><img src="https://img.shields.io/github/v/release/shali10/hermes-patches?color=blue&label=Release" alt="Latest Release" /></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-v1.3.8-orange.svg" alt="Changelog" /></a>
+  <a href="https://pypi.org/project/hermes-patches/"><img src="https://img.shields.io/pypi/v/hermes-patches?color=blue&label=PyPI" alt="PyPI Version" /></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-v1.4.0-orange.svg" alt="Changelog" /></a>
   <a href="https://github.com/shali10/hermes-patches/actions/workflows/test.yml"><img src="https://github.com/shali10/hermes-patches/actions/workflows/test.yml/badge.svg" alt="CI Status" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg" alt="Python 3.10+" /></a>
@@ -24,7 +25,7 @@
 <a id="features"></a>
 ## ✨ 核心特性与生产痛点对照
 
-| 模块 | 官方原生状态 | 安装 hermes-patches (v1.3.8) 后 ✨ |
+| 模块 | 官方原生状态 | 安装 hermes-patches (v1.4.0) 后 ✨ |
 |---|---|---|
 | **📊 Token 消耗全透视** | 仅显示精简模型与百分比（`gpt-4o · 7%`） | **全指标精准展示**：Prompt 总量、缓存命中数及百分比、输出 Token、执行耗时、上下文占用（千分位格式化） |
 | **📑 Telegram 原生表格** | CJK 中文字符下 Markdown 表格易被拦截退化为无序列表 | **100% 放行原生 Pipe Table**，享受现代 Telegram 原生高保真表格渲染 |
@@ -34,6 +35,7 @@
 | **🚫 流式静默与频控护盾** | 中间消息高频 `editMessageText` 导致界面狂闪、手机震动，易触发 Telegram 429 限流 | **支持全局 `display.streaming: false` 优雅静默**，转为一次性完整交付，零抖动、免限流 |
 | **🧠 思考过程深度净化** | 推理模型输出冗长 `<think>` 刷屏，CLI 弹大窗，IM 偶发草稿泄露 | **全链路深度剥离所有思维链变体**（`<think>`, `<thought>`, `<antml:thought>` 及未闭合块），只留干净最终正文 |
 | **✂️ 4096 消息智能切分** | 超过 4096 字符时生硬截断，导致代码块破坏或报 `can't parse entities` | **优先在自然段落（`\n\n`）边界优雅切分**，自动闭合并补齐代码围栏与表格结构 |
+| **📁 失效目录自动回退** | 显式 workdir 被删除后执行命令报 `exit 126` 崩溃 | **自动回退到安全可用父目录**，消除临时目录删除引发的命令执行失败 |
 | **⚙️ 零配置开箱即用** | 安装后需手动敲多条命令开启配置 | **自动校验并初始化 `config.yaml`**，页脚、参数与优化开箱即用，无需多余设置 |
 | **🔄 自动平滑重启生效** | 安装后需用户自行排查进程并手动重启 | **自动探测并平滑重启 `hermes-gateway` 服务**，一行命令瞬间全量生效 |
 | **🚀 升级自愈守护** | 升级 Hermes 源码或 `hermes update` 会丢失补丁 | **systemd `ExecStartPre` 自动守护**，版本更新后自动重应用，**升级永不失效** |
@@ -73,6 +75,8 @@
 | **DeepSeek-V3** | `64,000` | 优秀 | 💰 COST-EFFICIENT | 0.75s |
 | **GPT-4o** | `128,000` | 卓越 | 🌐 MULTIMODAL | 0.45s |
 ```
+
+> 💡 **进阶生态联动推荐**：搭配配套开源利器 [shali10/tg-rich-render](https://github.com/shali10/tg-rich-render)，可实现自适应 CJK/Emoji 宽度补偿、窄屏卡片流自适应排版与原生表格无缝呈现，彻底告别移动端与桌面端的错位与锯齿！
 
 ---
 
@@ -160,7 +164,27 @@
 <a id="installation"></a>
 ## 🚀 极速安装与部署 (Installation)
 
-### 选项 A：零配置一键安装并自动生效（强力推荐）
+### 选项 A：标准 Python 安装（推荐 / 全局可用 CLI）
+
+现已支持作为标准 Python 包分发与运行：
+
+```bash
+# 1. 直接通过 pip 安装
+pip install hermes-patches
+
+# 2. 终端任意位置直接调出中文交互式控制台
+hermes-patches
+
+# 3. 或一键全自动静默打全量补丁、自动配置并平滑重启
+hermes-patches --all --auto-config --restart
+```
+
+> 💡 **免安装直接运行 (pipx)**：  
+> `pipx run hermes-patches --help`
+
+---
+
+### 选项 B：零配置一键脚本安装并自动生效
 
 直接在运行 Hermes Agent 的服务器上执行：
 
@@ -170,7 +194,7 @@ curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install
 
 > **✨ 全自动一键搞定**：
 > 1. 🔍 **全自动寻径**：通过运行进程、systemd 配置、CLI shebang 与虚拟环境智能识别当前活跃的 Hermes 源码路径；
-> 2. 💉 **全量注入补丁**：编译检查并原子注入全部 8 项增强补丁；
+> 2. 💉 **全量注入补丁**：编译检查并原子注入全部 9 项增强补丁；
 > 3. ⚙️ **零配置初始化**：自动校验并配置 `~/.hermes/config.yaml`（激活页脚全量计量与参数）；
 > 4. 🧹 **字节码刷新**：清理全部 `__pycache__` 缓存；
 > 5. 🚀 **升级自愈守护**：配置 systemd `ExecStartPre` 守护，Hermes 源码更新后自动重应用；
@@ -178,7 +202,7 @@ curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install
 
 ---
 
-### 选项 B：交互式中文数字菜单
+### 选项 C：交互式中文数字菜单
 
 直接在终端运行 `install.sh` 即可打开中文交互式控制台：
 
@@ -190,7 +214,7 @@ bash install.sh
 
 ```text
 =====================================================
-   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.3.0)   
+   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.4.0)   
 =====================================================
  目标路径: /usr/local/lib/hermes-agent
 
@@ -204,16 +228,18 @@ bash install.sh
  [7] 🚫 流式输出静默控制与 429 频控防护
  [8] 🧠 全链路深度思考过程强力净化
  [9] ✂️ Telegram 4096 长消息智能段落切分
+ [10] 📁 Terminal 失效工作目录自动回退
  ---------------------------------------------------
- [10] 🔍 预览变更 (Dry Run，不写入磁盘)
- [11] ↩️ 卸载补丁并无损还原 (.bak 原生回滚)
+ [11] 🔍 预览变更 (Dry Run，不写入磁盘)
+ [12] ↩️ 卸载补丁并无损还原 (.bak 原生回滚)
+ [13] 🧪 运行运行时行为断言测试套件 (Behavior Test)
  [0]  🚪 退出脚本
 =====================================================
 ```
 
 ---
 
-### 选项 C：进阶命令行参数 (Advanced CLI Flags)
+### 选项 D：进阶命令行参数 (Advanced CLI Flags)
 
 ```bash
 # 1. 预览即将执行的改动 (Dry Run，不写入磁盘)
@@ -241,6 +267,7 @@ python3 hermes_patches.py --skip menu --auto-config --restart
 | `nostream` | `no-stream`, `quiet-stream`, `stream-shield` | `gateway/run.py` | 修复全局 `display.streaming: false` 生效机制，屏蔽 429 频控 |
 | `clean-think` | `think`, `reasoning`, `suppress-thinking` | `cli.py`<br>`gateway/stream_consumer.py` | 净化思考过程与变体标签，默认静音终端冗长思维链弹框 |
 | `smart-split` | `split`, `chunking`, `telegram-split` | `gateway/platforms/base.py` | 4096+ 长消息优先在自然段落切分，保护代码块与表格无损 |
+| `terminal-cwd` | `cwd`, `terminal`, `deleted-workdir` | `tools/environments/base.py` | 显式 workdir 被删除后，在构建命令 wrapper 前回退到可用父目录，避免 exit 126 |
 
 ---
 
@@ -248,7 +275,7 @@ python3 hermes_patches.py --skip menu --auto-config --restart
 ## ❓ 常见问题与排障指南 (FAQ & Troubleshooting)
 
 ### Q1: 为什么安装并重启后，消息末尾依然看不到 Token 统计页脚？
-* **v1.3.0 现已全自动解决**：最新版本的 `install.sh` 会在安装时**自动修改 `~/.hermes/config.yaml` 开启 `runtime_footer` 并注入全量参数字段**。
+* **现已全自动解决**：最新版本的 `hermes-patches` 会在安装时**自动修改 `~/.hermes/config.yaml` 开启 `runtime_footer` 并注入全量参数字段**。
 * **手动检查**：执行 `hermes config get display.runtime_footer` 确认 `enabled: true`，或在 Telegram 机器人直接发送 `/footer on`。
 
 ### Q2: 为什么输入 `/` 看到的快捷指令依然是英文？
@@ -267,6 +294,8 @@ python3 hermes_patches.py --skip menu --auto-config --restart
 ### Q4: 如何验证补丁是否真正打入当前运行的 Hermes 源码？
 * **解决办法**：在服务器终端执行 Dry-Run 预检命令：
   ```bash
+  hermes-patches --dry-run -v
+  # 或通过一键脚本运行
   curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install.sh | bash -s -- --dry-run -v
   ```
   若显示 `⚪ [已是最新/无需变更 (UNCHANGED)]` 或 `🟢 [已应用 (APPLIED)]`，说明补丁已 100% 注入。
@@ -278,6 +307,7 @@ python3 hermes_patches.py --skip menu --auto-config --restart
 
 | 版本 | 发布日期 | 重点更新摘要 | 详情链接 |
 |:---:|:---:|---|:---:|
+| **`v1.4.0`** | 2026-09-02 | **⚡ 多厂商全字段缓存解析 + 代理会话级智能前缀推导 + terminal-cwd 补丁 + PyPI 标准工程化** | [查看详情 📄](CHANGELOG.md#v140---2026-09-02) |
 | **`v1.3.8`** | 2026-08-29 | **🎯 Token 计量双路兼容 + 真实 Prompt 总量 (Input+Cache) 与缓存命中 100% 精确对齐** | [查看详情 📄](CHANGELOG.md#v137---2026-08-29) |
 | **`v1.3.0`** | 2026-08-29 | **🚀 零配置开箱即用 + 自动平滑重启 + 终极自适应寻径引擎 + 字节码全量清理** | [查看详情 📄](CHANGELOG.md#v130---2026-08-29) |
 | **`v1.2.0`** | 2026-08-29 | 增加流式静默控制（429 护盾）、思考过程深度净化、4096 智能切分、交互式中文数字菜单与排障 FAQ | [查看详情 📄](CHANGELOG.md#v120---2026-08-29) |

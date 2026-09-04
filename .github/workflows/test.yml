@@ -52,6 +52,7 @@ jobs:
           python3 -m py_compile /tmp/hermes-agent/cli.py
           python3 -m py_compile /tmp/hermes-agent/gateway/stream_consumer.py
           python3 -m py_compile /tmp/hermes-agent/gateway/platforms/base.py
+          python3 -m py_compile /tmp/hermes-agent/tools/environments/base.py
 
       - name: End-to-End Runtime Behavioral Assertions
         run: |
