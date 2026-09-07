@@ -538,12 +538,7 @@ def format_runtime_footer('''
     # Patch 3: Telegram Menu & /help /commands Full Chinese Localization
     # -------------------------------------------------------------
     def patch_telegram_menu_zh(self) -> bool:
-        def transform(src: str) -> str:
-            cand = src
-            if "alias_note_zh" in cand and "响应平台启动请求" in cand:
-                return cand
-
-            zh_dict_block = '''_TELEGRAM_ZH_DESCRIPTIONS: dict[str, str] = {
+        zh_dict_block = '''_TELEGRAM_ZH_DESCRIPTIONS: dict[str, str] = {
     "start": "响应平台启动请求（静默确认）",
     "new": "新建对话会话（重置会话 ID 与历史）",
     "topic": "开启或管理 Telegram 私聊话题会话",
@@ -645,25 +640,28 @@ def format_runtime_footer('''
     "quit": "退出 CLI 终端（--delete 同步删除会话历史）",
 }'''
 
+        def transform(src: str) -> str:
+            cand = src
+            if "alias_note_zh" in cand and "响应平台启动请求" in cand:
+                return cand
+
             # Clean any legacy _TELEGRAM_ZH_DESCRIPTIONS block if present
             if "_TELEGRAM_ZH_DESCRIPTIONS: dict[str, str] = {" in cand:
                 cand = re.sub(r'_TELEGRAM_ZH_DESCRIPTIONS:\s*dict\[str,\s*str\]\s*=\s*\{.*?\n\}', '', cand, flags=re.DOTALL)
 
             # 1. Update _build_description with zh_dict_block
-            old_bd_pat = r'def _build_description\(cmd:\s*CommandDef\)\s*->\s*str:.*?(?=\n\n# Backwards-compatible|\n# Backwards-compatible)'
-            new_bd_code = zh_dict_block + '''\n\n\ndef _build_description(cmd: CommandDef) -> str:
+            if "_TELEGRAM_ZH_DESCRIPTIONS" not in cand and "def _build_description(" in cand:
+                cand = cand.replace("def _build_description(", zh_dict_block + "\n\n\ndef _build_description(", 1)
+
+            old_bd_body_pat = r'def _build_description\(cmd:\s*CommandDef\)\s*->\s*str:\n(?:    [^\n]*\n)+'
+            new_bd_body = '''def _build_description(cmd: CommandDef) -> str:
     """Build a CLI-facing description string including usage hint."""
     desc = _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, cmd.description)
     if cmd.args_hint:
         return f"{desc} (用法: /{cmd.name} {cmd.args_hint})"
-    return desc'''
-            cand, count = re.subn(old_bd_pat, new_bd_code, cand, count=1, flags=re.DOTALL)
-            if count == 0 and "def _build_description(" in cand:
-                # Direct replacement fallback
-                bd_start = cand.find("def _build_description(")
-                bd_end = cand.find("\n\n# Backwards-compatible", bd_start)
-                if bd_start >= 0 and bd_end >= 0:
-                    cand = cand[:bd_start] + new_bd_code + cand[bd_end:]
+    return desc
+'''
+            cand = re.sub(old_bd_body_pat, new_bd_body, cand, count=1)
 
             # 2. Update gateway_help_lines to translate descriptions & alias note
             old_ghl = '        lines.append(f"`/{cmd.name}{args}` -- {cmd.description}{alias_note}")'
@@ -696,7 +694,43 @@ def format_runtime_footer('''
 
             return cand
 
-        return self.apply_file_patch("hermes_cli/commands.py", transform, "🇨🇳 Telegram 快捷菜单与 /help /commands 汉化")
+        ok1 = self.apply_file_patch("hermes_cli/commands.py", transform, "🇨🇳 Telegram 快捷菜单与 /help /commands 汉化")
+
+        # Upstream hermes-agent moved telegram_bot_commands to commands_platforms.py
+        if (self.target_dir / "hermes_cli/commands_platforms.py").is_file():
+            def transform_platforms(src: str) -> str:
+                cand = src
+                if "_TELEGRAM_ZH_DESCRIPTIONS" in cand and "响应平台启动请求" in cand:
+                    return cand
+
+                if "_TELEGRAM_ZH_DESCRIPTIONS" not in cand:
+                    anchor = "_CMD_NAME_LIMIT = 32"
+                    if anchor in cand:
+                        cand = cand.replace(anchor, zh_dict_block + "\n\n\n" + anchor, 1)
+                    else:
+                        cand = cand + "\n\n\n" + zh_dict_block
+
+                old_pairs = "pairs = [(cmd.name, cmd.description) for cmd in _gateway_available_commands()]"
+                new_pairs = "pairs = [(cmd.name, _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, cmd.description)) for cmd in _gateway_available_commands()]"
+                if old_pairs in cand:
+                    cand = cand.replace(old_pairs, new_pairs, 1)
+
+                old_plugin_pairs = "pairs += [(n, d) for n, d, hint in _iter_plugin_command_entries()"
+                new_plugin_pairs = "pairs += [(n, _TELEGRAM_ZH_DESCRIPTIONS.get(n, d)) for n, d, hint in _iter_plugin_command_entries()"
+                if old_plugin_pairs in cand:
+                    cand = cand.replace(old_plugin_pairs, new_plugin_pairs, 1)
+
+                old_ret = "return [(tg, desc) for name, desc in pairs if (tg := _sanitize_telegram_name(name))]"
+                new_ret = "return [(tg, _TELEGRAM_ZH_DESCRIPTIONS.get(name, desc)) for name, desc in pairs if (tg := _sanitize_telegram_name(name))]"
+                if old_ret in cand:
+                    cand = cand.replace(old_ret, new_ret, 1)
+
+                return cand
+
+            ok2 = self.apply_file_patch("hermes_cli/commands_platforms.py", transform_platforms, "🇨🇳 Telegram Platforms 命令汉化")
+            return ok1 and ok2
+
+        return ok1
 
     # -------------------------------------------------------------
     # Patch 4: State DB Foreign Key & Contention Self-Heal
@@ -749,7 +783,60 @@ def format_runtime_footer('''
 
             return cand
 
-        return self.apply_file_patch("hermes_state.py", transform, "🛡️ SQLite 外键自愈与防锁表")
+        ok1 = self.apply_file_patch("hermes_state.py", transform, "🛡️ SQLite 外键自愈与防锁表")
+
+        # Upstream modular hermes_state split (hermes_state_wal.py & hermes_state_messages.py)
+        wal_file = self.target_dir / "hermes_state_wal.py"
+        msg_file = self.target_dir / "hermes_state_messages.py"
+
+        if wal_file.is_file():
+            def transform_wal(src: str) -> str:
+                cand = src
+                if "PRAGMA busy_timeout = 5000" in cand:
+                    return cand
+                anchor = "def apply_database_pragmas("
+                if anchor in cand:
+                    pos = cand.find(anchor)
+                    doc_end = cand.find('"""\n', pos)
+                    if doc_end > pos:
+                        insert_pos = doc_end + len('"""\n')
+                        bt_code = """    try:\n        conn.execute("PRAGMA busy_timeout = 5000")\n    except Exception:\n        pass\n\n"""
+                        cand = cand[:insert_pos] + bt_code + cand[insert_pos:]
+                return cand
+            self.apply_file_patch("hermes_state_wal.py", transform_wal, "🛡️ SQLite WAL Busy Timeout 加固")
+
+        if msg_file.is_file():
+            def transform_messages(src: str) -> str:
+                cand = src
+                if "FK self-heal" in cand:
+                    return cand
+                ins_target = "msg_id = conn.execute(_INSERT_MESSAGE_SQL, params).lastrowid"
+                heal_code = """            # FK self-heal: ensure the session parent row exists
+            try:
+                conn.execute(
+                    "INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)",
+                    (session_id, time.time()),
+                )
+            except Exception:
+                pass\n\n            """
+                if ins_target in cand:
+                    cand = cand.replace(ins_target, heal_code + ins_target, 1)
+
+                batch_target = "inserted, tool_calls_total = self._insert_message_rows("
+                heal_batch = """# FK batch self-heal: ensure session exists
+            try:
+                conn.execute(
+                    "INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)",
+                    (session_id, time.time()),
+                )
+            except Exception:
+                pass\n\n            """
+                if batch_target in cand:
+                    cand = cand.replace(batch_target, heal_batch + batch_target, 1)
+                return cand
+            self.apply_file_patch("hermes_state_messages.py", transform_messages, "🛡️ SQLite 消息外键自愈加固")
+
+        return ok1
 
     # -------------------------------------------------------------
     # Patch 5: Tirith Low-Severity Approval Prompt Skip

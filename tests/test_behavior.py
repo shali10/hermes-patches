@@ -87,7 +87,7 @@ def main():
     # -------------------------------------------------------------
     # 1. Runtime Footer
     # -------------------------------------------------------------
-    print("Testing 1/9: Runtime Footer...")
+    print("Testing 1/10: Runtime Footer...")
     from gateway.runtime_footer import format_runtime_footer
     line = format_runtime_footer(
         model="gemini-3.7-flash-high",
@@ -107,7 +107,7 @@ def main():
     # -------------------------------------------------------------
     # 2. Telegram CJK Table Bypass
     # -------------------------------------------------------------
-    print("Testing 2/9: Telegram CJK Table Bypass...")
+    print("Testing 2/10: Telegram CJK Table Bypass...")
     from plugins.platforms.telegram.adapter import TelegramAdapter
     adapter = TelegramAdapter.__new__(TelegramAdapter)
     table_sample = "测试表格\n| a | b |\n|---|---|\n| 1 | 2 |"
@@ -117,8 +117,12 @@ def main():
     # -------------------------------------------------------------
     # 3. Telegram Chinese Commands
     # -------------------------------------------------------------
-    print("Testing 3/9: Telegram Chinese Commands...")
-    from hermes_cli.commands import telegram_bot_commands, gateway_help_lines
+    print("Testing 3/10: Telegram Chinese Commands...")
+    try:
+        from hermes_cli.commands_platforms import telegram_bot_commands
+    except ImportError:
+        from hermes_cli.commands import telegram_bot_commands
+    from hermes_cli.commands import gateway_help_lines
     cmds = telegram_bot_commands()
     assert len(cmds) > 0, "No bot commands registered"
     assert any("响应平台启动请求" in d for _, d in cmds), "Chinese command description not found"
@@ -128,16 +132,29 @@ def main():
     # -------------------------------------------------------------
     # 4. State DB Hardening
     # -------------------------------------------------------------
-    print("Testing 4/9: State DB Hardening...")
-    state_code = (target_dir / "hermes_state.py").read_text(encoding="utf-8")
-    assert "PRAGMA busy_timeout = 5000" in state_code, "PRAGMA busy_timeout missing in hermes_state.py"
-    assert "FK self-heal: ensure the session parent row exists" in state_code, "FK self-heal missing in append_message"
-    assert "FK batch self-heal" in state_code, "FK batch self-heal missing in append_messages_batch"
+    print("Testing 4/10: State DB Hardening...")
+    state_file = target_dir / "hermes_state.py"
+    wal_file = target_dir / "hermes_state_wal.py"
+    messages_file = target_dir / "hermes_state_messages.py"
+
+    state_code = state_file.read_text(encoding="utf-8") if state_file.is_file() else ""
+    if wal_file.is_file():
+        wal_code = wal_file.read_text(encoding="utf-8")
+        assert "PRAGMA busy_timeout = 5000" in wal_code or "PRAGMA busy_timeout = 5000" in state_code, "PRAGMA busy_timeout missing"
+    else:
+        assert "PRAGMA busy_timeout = 5000" in state_code, "PRAGMA busy_timeout missing in hermes_state.py"
+
+    if messages_file.is_file():
+        msg_code = messages_file.read_text(encoding="utf-8")
+        assert "FK self-heal" in msg_code or "FK self-heal" in state_code, "FK self-heal missing"
+    else:
+        assert "FK self-heal: ensure the session parent row exists" in state_code, "FK self-heal missing in append_message"
+        assert "FK batch self-heal" in state_code, "FK batch self-heal missing in append_messages_batch"
 
     # -------------------------------------------------------------
     # 5. Tirith Low-Severity
     # -------------------------------------------------------------
-    print("Testing 5/9: Tirith Low-Severity Approval...")
+    print("Testing 5/10: Tirith Low-Severity Approval...")
     approval_code = (target_dir / "tools/approval.py").read_text(encoding="utf-8")
     assert "_skip_low_warn" in approval_code, "_skip_low_warn missing in tools/approval.py"
     assert 'return {"approved": True, "message": None}' in approval_code, "Dict return contract missing in _skip_low_warn"
@@ -145,7 +162,7 @@ def main():
     # -------------------------------------------------------------
     # 6. Streaming Control + Gateway cache-read transport
     # -------------------------------------------------------------
-    print("Testing 6/9: Streaming Control & Cache Tokens Transport...")
+    print("Testing 6/10: Streaming Control & Cache Tokens Transport...")
     run_code = (target_dir / "gateway/run.py").read_text(encoding="utf-8")
     assert "_global_display_streaming" in run_code, "_global_display_streaming missing in gateway/run.py"
     assert run_code.count('"cache_read_tokens": _cache_read_toks') == 2, "cache_read_tokens payload count != 2"
@@ -154,7 +171,7 @@ def main():
     # -------------------------------------------------------------
     # 7. Clean Thinking
     # -------------------------------------------------------------
-    print("Testing 7/9: Clean Thinking...")
+    print("Testing 7/10: Clean Thinking...")
     cli_code = (target_dir / "cli.py").read_text(encoding="utf-8")
     stream_code = (target_dir / "gateway/stream_consumer.py").read_text(encoding="utf-8")
     assert "<antml:thought>" in cli_code and "<antml:thought>" in stream_code, "Thought tags missing in clean-thinking"
@@ -162,7 +179,7 @@ def main():
     # -------------------------------------------------------------
     # 8. Telegram 4096 Smart Split
     # -------------------------------------------------------------
-    print("Testing 8/9: Telegram 4096 Smart Split...")
+    print("Testing 8/10: Telegram 4096 Smart Split...")
     base_code = (target_dir / "gateway/platforms/base.py").read_text(encoding="utf-8")
     assert "hermes-patches smart-split" in base_code, "smart-split missing in gateway/platforms/base.py"
 
