@@ -507,6 +507,54 @@ def format_runtime_footer('''
 
         ok1 = self.apply_file_patch("gateway/runtime_footer.py", transform_footer, "📊 Runtime Footer 全量计量")
         ok2 = self.apply_file_patch("gateway/run.py", transform_gateway_run, "⚙️ Gateway 运行态参数注入")
+
+        # Upstream modular run_turn split (run_turn_runner.py & run_turn.py)
+        if (self.target_dir / "gateway/run_turn_runner.py").is_file():
+            def transform_runner_usage(src: str) -> str:
+                cand = src
+                if '"cache_read_tokens":' in cand:
+                    return cand
+                target_usage = '''        usage = {
+            "last_prompt_tokens": getattr(comp, "last_prompt_tokens", 0) if has_comp else 0,
+            "input_tokens": getattr(agent, "session_prompt_tokens", 0) if has_comp else 0,
+            "output_tokens": getattr(agent, "session_completion_tokens", 0) if has_comp else 0,'''
+                new_usage = '''        usage = {
+            "last_prompt_tokens": getattr(comp, "last_prompt_tokens", 0) if has_comp else 0,
+            "input_tokens": getattr(agent, "session_prompt_tokens", 0) if has_comp else 0,
+            "output_tokens": getattr(agent, "session_completion_tokens", 0) if has_comp else 0,
+            "cache_read_tokens": getattr(agent, "session_cache_read_tokens", 0) if has_comp else 0,'''
+                if target_usage in cand:
+                    cand = cand.replace(target_usage, new_usage, 1)
+                return cand
+            self.apply_file_patch("gateway/run_turn_runner.py", transform_runner_usage, "⚙️ Runner 缓存 Token 计量传递")
+
+        if (self.target_dir / "gateway/run_turn.py").is_file():
+            def transform_turn_footer(src: str) -> str:
+                cand = src
+                if "cache_read_tokens=agent_result.get" in cand:
+                    return cand
+                old_turn_bfl = '''            return _bfl(
+                user_config=_load_gateway_config(),
+                platform_key=_platform_config_key(source.platform), model=agent_result.get("model"),
+                context_tokens=agent_result.get("last_prompt_tokens", 0) or 0,
+                context_length=agent_result.get("context_length") or None,
+                cwd=_terminal_scope_cwd(""), turn_seconds=_turn_seconds,
+            )'''
+                new_turn_bfl = '''            return _bfl(
+                user_config=_load_gateway_config(),
+                platform_key=_platform_config_key(source.platform), model=agent_result.get("model"),
+                context_tokens=agent_result.get("last_prompt_tokens", 0) or 0,
+                context_length=agent_result.get("context_length") or None,
+                cwd=_terminal_scope_cwd(""), turn_seconds=_turn_seconds,
+                prompt_tokens=agent_result.get("prompt_tokens") or agent_result.get("input_tokens") or 0,
+                output_tokens=agent_result.get("output_tokens") or 0,
+                cache_read_tokens=agent_result.get("cache_read_tokens") or 0,
+            )'''
+                if old_turn_bfl in cand:
+                    cand = cand.replace(old_turn_bfl, new_turn_bfl, 1)
+                return cand
+            self.apply_file_patch("gateway/run_turn.py", transform_turn_footer, "⚙️ Turn 页脚计量参数直传")
+
         ok3 = self.apply_file_patch("agent/usage_pricing.py", transform_usage_pricing, "🧠 多模型厂商全字段缓存解析")
         ok4 = self.apply_file_patch("agent/conversation_loop.py", transform_conversation_loop, "⚡ 代理会话级智能前缀缓存补齐")
         return ok1 and ok2 and ok3 and ok4
@@ -914,6 +962,36 @@ def format_runtime_footer('''
                 cand = cand.replace(old_gate, new_gate, 1)
             return cand
 
+        # Modular upstream architecture (run_turn_runner.py)
+        if (self.target_dir / "gateway/run_turn_runner.py").is_file():
+            def transform_runner(src: str) -> str:
+                cand = src
+                if "_global_display_streaming" in cand:
+                    return cand
+
+                old_runner_gate = '''        # display.platforms.<plat>.streaming may disable streaming per platform; None = follow global.
+        plat_streaming = ctx.resolve_display_setting(ctx.user_config, platform_key, "streaming")
+        want_stream_deltas = (
+            scfg.enabled and scfg.transport != "off" if plat_streaming is None else bool(plat_streaming)
+        )'''
+                new_runner_gate = '''        # display.platforms.<plat>.streaming may disable streaming per platform; None = follow global.
+        plat_streaming = ctx.resolve_display_setting(ctx.user_config, platform_key, "streaming")
+        # Check global display.streaming setting (hermes-patches stream-shield)
+        _global_display_streaming = None
+        if isinstance(ctx.user_config, dict):
+            _global_display_streaming = (ctx.user_config.get("display") or {}).get("streaming")
+        if plat_streaming is None and _global_display_streaming is not None:
+            plat_streaming = bool(_global_display_streaming)
+
+        want_stream_deltas = (
+            scfg.enabled and scfg.transport != "off" if plat_streaming is None else bool(plat_streaming)
+        )'''
+                if old_runner_gate in cand:
+                    cand = cand.replace(old_runner_gate, new_runner_gate, 1)
+                return cand
+            ok1 = self.apply_file_patch("gateway/run_turn_runner.py", transform_runner, "🚫 流式控制与 429 护盾 (Runner)")
+            return ok1
+
         return self.apply_file_patch("gateway/run.py", transform, "🚫 流式控制与 429 护盾")
 
     # -------------------------------------------------------------
@@ -969,6 +1047,14 @@ def format_runtime_footer('''
 
         ok1 = self.apply_file_patch("cli.py", transform_cli, "🧠 CLI 终端思考过程静音")
         ok2 = self.apply_file_patch("gateway/stream_consumer.py", transform_stream_consumer, "🧠 Gateway 思考标签深度净化")
+
+        # Upstream modular split for stream & think tags
+        if (self.target_dir / "hermes_cli/cli_stream_mixin.py").is_file():
+            self.apply_file_patch("hermes_cli/cli_stream_mixin.py", transform_cli, "🧠 CLI Stream Mixin 思考标签净化")
+
+        if (self.target_dir / "gateway/stream_consumer_think.py").is_file():
+            self.apply_file_patch("gateway/stream_consumer_think.py", transform_stream_consumer, "🧠 Gateway Stream Think 思考标签净化")
+
         return ok1 and ok2
 
     # -------------------------------------------------------------
@@ -1075,6 +1161,14 @@ def format_runtime_footer('''
                 cand = cand.replace(old_quote_mask, new_quote_mask, 1)
 
             return cand
+
+        # Upstream modular split for approval detection
+        if (self.target_dir / "tools/approval_detection.py").is_file():
+            return self.apply_file_patch(
+                "tools/approval_detection.py",
+                transform_approval,
+                "🧱 SQLite 主库防误删护栏 (Detection)",
+            )
 
         return self.apply_file_patch(
             "tools/approval.py",

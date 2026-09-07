@@ -54,6 +54,10 @@ jobs:
           python3 -m py_compile /tmp/hermes-agent/gateway/platforms/base.py
           python3 -m py_compile /tmp/hermes-agent/tools/environments/base.py
           [ -f /tmp/hermes-agent/hermes_cli/commands_platforms.py ] && python3 -m py_compile /tmp/hermes-agent/hermes_cli/commands_platforms.py || true
+          [ -f /tmp/hermes-agent/gateway/run_turn_runner.py ] && python3 -m py_compile /tmp/hermes-agent/gateway/run_turn_runner.py || true
+          [ -f /tmp/hermes-agent/gateway/run_turn.py ] && python3 -m py_compile /tmp/hermes-agent/gateway/run_turn.py || true
+          [ -f /tmp/hermes-agent/hermes_state_wal.py ] && python3 -m py_compile /tmp/hermes-agent/hermes_state_wal.py || true
+          [ -f /tmp/hermes-agent/hermes_state_messages.py ] && python3 -m py_compile /tmp/hermes-agent/hermes_state_messages.py || true
 
       - name: End-to-End Runtime Behavioral Assertions
         run: |

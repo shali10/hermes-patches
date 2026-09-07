@@ -163,17 +163,29 @@ def main():
     # 6. Streaming Control + Gateway cache-read transport
     # -------------------------------------------------------------
     print("Testing 6/10: Streaming Control & Cache Tokens Transport...")
-    run_code = (target_dir / "gateway/run.py").read_text(encoding="utf-8")
-    assert "_global_display_streaming" in run_code, "_global_display_streaming missing in gateway/run.py"
-    assert run_code.count('"cache_read_tokens": _cache_read_toks') == 2, "cache_read_tokens payload count != 2"
-    assert run_code.count('_cache_read_toks = getattr(_agent, "session_cache_read_tokens", 0) or 0') == 1, "_cache_read_toks extraction count != 1"
+    run_file = target_dir / "gateway/run.py"
+    runner_file = target_dir / "gateway/run_turn_runner.py"
+    if runner_file.is_file():
+        runner_code = runner_file.read_text(encoding="utf-8")
+        assert "_global_display_streaming" in runner_code, "_global_display_streaming missing in gateway/run_turn_runner.py"
+        assert '"cache_read_tokens": getattr(agent, "session_cache_read_tokens"' in runner_code, "cache_read_tokens missing in usage dict"
+    else:
+        run_code = run_file.read_text(encoding="utf-8")
+        assert "_global_display_streaming" in run_code, "_global_display_streaming missing in gateway/run.py"
+        assert run_code.count('"cache_read_tokens": _cache_read_toks') == 2, "cache_read_tokens payload count != 2"
+        assert run_code.count('_cache_read_toks = getattr(_agent, "session_cache_read_tokens", 0) or 0') == 1, "_cache_read_toks extraction count != 1"
 
     # -------------------------------------------------------------
     # 7. Clean Thinking
     # -------------------------------------------------------------
     print("Testing 7/10: Clean Thinking...")
-    cli_code = (target_dir / "cli.py").read_text(encoding="utf-8")
-    stream_code = (target_dir / "gateway/stream_consumer.py").read_text(encoding="utf-8")
+    cli_file = target_dir / "cli.py"
+    stream_file = target_dir / "gateway/stream_consumer.py"
+    cli_mixin = target_dir / "hermes_cli/cli_stream_mixin.py"
+    stream_think = target_dir / "gateway/stream_consumer_think.py"
+
+    cli_code = cli_mixin.read_text(encoding="utf-8") if cli_mixin.is_file() else cli_file.read_text(encoding="utf-8")
+    stream_code = stream_think.read_text(encoding="utf-8") if stream_think.is_file() else stream_file.read_text(encoding="utf-8")
     assert "<antml:thought>" in cli_code and "<antml:thought>" in stream_code, "Thought tags missing in clean-thinking"
 
     # -------------------------------------------------------------
@@ -194,8 +206,10 @@ def main():
     # 10. State DB Anti-Destruction Guard
     # -------------------------------------------------------------
     print("Testing 10/10: State DB Anti-Destruction Guard...")
-    approval_full_code = (target_dir / "tools/approval.py").read_text(encoding="utf-8")
-    assert "hermes-patches state-guard" in approval_full_code, "state-guard pattern missing in tools/approval.py"
+    app_file = target_dir / "tools/approval.py"
+    app_detect_file = target_dir / "tools/approval_detection.py"
+    approval_full_code = app_detect_file.read_text(encoding="utf-8") if app_detect_file.is_file() else app_file.read_text(encoding="utf-8")
+    assert "hermes-patches state-guard" in approval_full_code, "state-guard pattern missing in approval module"
     from tools.approval import detect_hardline_command
     # Dangerous commands targeting live state.db must be blocked unconditionally
     is_blocked, desc = detect_hardline_command("rm /root/.hermes/state.db")
