@@ -15,6 +15,7 @@
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg" alt="Python 3.10+" /></a>
   <a href="https://github.com/NousResearch/hermes-agent"><img src="https://img.shields.io/badge/Hermes_Agent-v0.20%2B-orange.svg" alt="Hermes Agent" /></a>
+  <a href="https://linux.do"><img src="https://img.shields.io/badge/Community-LINUX%20DO-2563EB?logo=linux&logoColor=white" alt="LINUX DO" /></a>
   <a href="https://github.com/shali10/hermes-patches/pulls"><img src="https://img.shields.io/badge/PRs-welcome-green.svg" alt="PRs Welcome" /></a>
 </p>
 
@@ -346,6 +347,12 @@ bash install.sh --uninstall
 2. 添加补丁逻辑并确保通过 `python3 hermes_patches.py --dry-run -v`
 3. 提交代码并推送：`git push origin feature/awesome-patch`
 4. 创建 Pull Request，CI 将自动对 upstream 最新代码执行编译测试与幂等性验证。
+
+---
+
+## 🌟 社区认可与鸣谢 (Acknowledgement)
+
+本项目在生产实践、排障演进与多节点高可用打磨过程中，深度受益于 **[LINUX DO](https://linux.do/)** 极客社区的技术探讨与佬友支持，特此致谢！
 
 ---
 

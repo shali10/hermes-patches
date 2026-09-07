@@ -15,6 +15,7 @@
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg" alt="Python 3.10+" /></a>
   <a href="https://github.com/NousResearch/hermes-agent"><img src="https://img.shields.io/badge/Hermes_Agent-v0.20%2B-orange.svg" alt="Hermes Agent" /></a>
+  <a href="https://linux.do"><img src="https://img.shields.io/badge/Community-LINUX%20DO-2563EB?logo=linux&logoColor=white" alt="LINUX DO" /></a>
   <a href="https://github.com/shali10/hermes-patches/pulls"><img src="https://img.shields.io/badge/PRs-welcome-green.svg" alt="PRs Welcome" /></a>
 </p>
 
@@ -255,6 +256,12 @@ docker restart <container_name>
 ```bash
 bash install.sh --uninstall
 ```
+
+---
+
+## 🌟 Community & Acknowledgement
+
+Special thanks to the **[LINUX DO](https://linux.do/)** community for continuous technical discussions, production debugging insights, and support!
 
 ---
 
