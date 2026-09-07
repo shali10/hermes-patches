@@ -10,12 +10,16 @@
 <p align="center">
   <a href="https://github.com/shali10/hermes-patches/releases"><img src="https://img.shields.io/github/v/release/shali10/hermes-patches?color=blue&label=Release" alt="Latest Release" /></a>
   <a href="https://pypi.org/project/hermes-patches/"><img src="https://img.shields.io/pypi/v/hermes-patches?color=blue&label=PyPI" alt="PyPI Version" /></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-v1.4.0-orange.svg" alt="Changelog" /></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-v1.5.0-orange.svg" alt="Changelog" /></a>
   <a href="https://github.com/shali10/hermes-patches/actions/workflows/test.yml"><img src="https://github.com/shali10/hermes-patches/actions/workflows/test.yml/badge.svg" alt="CI Status" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg" alt="Python 3.10+" /></a>
   <a href="https://github.com/NousResearch/hermes-agent"><img src="https://img.shields.io/badge/Hermes_Agent-v0.20%2B-orange.svg" alt="Hermes Agent" /></a>
   <a href="https://github.com/shali10/hermes-patches/pulls"><img src="https://img.shields.io/badge/PRs-welcome-green.svg" alt="PRs Welcome" /></a>
+</p>
+
+<p align="center">
+  <img src="docs/images/hermes_patches_showcase.png" alt="Hermes Patches Architecture & Features Showcase" width="100%" />
 </p>
 
 > 🧭 **Quick Navigation**: [✨ Features](#features) · [🔍 Showcase](#showcase) · [🚀 Installation](#installation) · [📦 Patches](#patches) · [❓ FAQ](#faq) · [📝 Changelog](#changelog) · [↩️ Uninstall](#uninstall)
@@ -25,7 +29,7 @@
 <a id="features"></a>
 ## ✨ Features & Comparison
 
-| Module | Upstream Vanilla | With hermes-patches (v1.4.0) ✨ |
+| Module | Upstream Vanilla | With hermes-patches (v1.5.0) ✨ |
 |---|---|---|
 | **📊 Token Telemetry** | Minimal model & percentage only (`gpt-4o · 7%`) | **Full telemetry**: Prompt total, cache hits & hit rate (%), output tokens, context %, and execution latency with formatted integers. |
 | **📑 Telegram Pipe Tables** | Markdown tables often degraded to plain unordered lists | **100% bypass for native pipe tables**, rendering modern rich text tables on desktop & mobile Telegram clients. |
@@ -36,6 +40,7 @@
 | **🧠 Deep Thinking Cleaner** | Reasoning models spam large `<think>` blocks in CLI and leak partial drafts | **Full suppression of thinking tags** (`<think>`, `<thought>`, `<antml:thought>` & unclosed blocks), leaving only clean responses. |
 | **✂️ 4096 Smart Message Split** | Truncating 4096+ chars breaks code fences or causes `can't parse entities` | **Splits at natural paragraph boundaries (`\n\n`)**, automatically closing and reopening code fences & tables. |
 | **📁 Terminal CWD Recovery** | Explicit deleted workdir leads to terminal crash (`exit 126`) | **Automatically resolves and falls back to safe local ancestor directory**. |
+| **🧱 State DB Anti-Destruction Guard** | Autonomous cleanup can accidentally delete `state.db`, wiping all session history | **Unconditional action-level hardline floor**: Blocks `rm / truncate / > / find-delete` targeting live `state.db`, while safely permitting `.bak` cleanups and read operations. |
 | **⚙️ Zero-Config Out-of-the-Box** | Requires manual config tweaks to show footers | **Automatically initializes `~/.hermes/config.yaml`** with all telemetry metrics pre-configured. |
 | **🔄 Seamless Auto-Restart** | Users have to manually find processes and restart | **Automatically reloads and restarts `hermes-gateway` service**, effective immediately in 1 step. |
 | **🚀 Upgrade-Immune Guard** | Hermes source updates overwrite local patches | **systemd `ExecStartPre` supervision hook**, automatically re-applying patches on restart. |
@@ -207,6 +212,7 @@ hermes-patches --skip menu --auto-config --restart
 | `clean-think` | `think`, `reasoning`, `suppress-thinking` | `cli.py`<br>`gateway/stream_consumer.py` | Strips `<think>` tags and suppresses verbose CLI thinking popups. |
 | `smart-split` | `split`, `chunking`, `telegram-split` | `gateway/platforms/base.py` | Splits 4096+ char messages at paragraph breaks (`\n\n`) and repairs code fences. |
 | `terminal-cwd` | `cwd`, `terminal`, `deleted-workdir` | `tools/environments/base.py` | Falls back to safe parent directory when explicit workdir is deleted, avoiding exit 126. |
+| `state-guard` | `db-guard`, `anti-delete`, `state-db-guard`, `guard` | `tools/approval.py` | Hardline action-anchored guard preventing accidental deletion or truncation of live state.db |
 
 ---
 
@@ -233,6 +239,7 @@ docker restart <container_name>
 
 | Version | Date | Highlights | Details |
 |:---:|:---:|---|:---:|
+| **`v1.5.0`** | 2026-09-07 | **🧱 SQLite state.db action-anchored anti-destruction floor (`state-guard`) + Neo-Brutalist showcase banner** | [View 📄](CHANGELOG.md#v150---2026-09-07) |
 | **`v1.4.0`** | 2026-09-02 | **⚡ Multi-vendor cache parsing + adaptive prefix derivation + terminal-cwd patch + PyPI packaging** | [View 📄](CHANGELOG.md#v140---2026-09-02) |
 | **`v1.3.8`** | 2026-08-29 | **🎯 Dual-path token resolution + true Prompt Total (Input+Cache) & KV cache hit rate alignment** | [View 📄](CHANGELOG.md#v137---2026-08-29) |
 | **`v1.3.0`** | 2026-08-29 | **🚀 Turnkey zero-config init + automatic service restart + multi-stage path probe + bytecode purging** | [View 📄](CHANGELOG.md#v130---2026-08-29) |

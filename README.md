@@ -10,12 +10,16 @@
 <p align="center">
   <a href="https://github.com/shali10/hermes-patches/releases"><img src="https://img.shields.io/github/v/release/shali10/hermes-patches?color=blue&label=Release" alt="Latest Release" /></a>
   <a href="https://pypi.org/project/hermes-patches/"><img src="https://img.shields.io/pypi/v/hermes-patches?color=blue&label=PyPI" alt="PyPI Version" /></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-v1.4.0-orange.svg" alt="Changelog" /></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-v1.5.0-orange.svg" alt="Changelog" /></a>
   <a href="https://github.com/shali10/hermes-patches/actions/workflows/test.yml"><img src="https://github.com/shali10/hermes-patches/actions/workflows/test.yml/badge.svg" alt="CI Status" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg" alt="Python 3.10+" /></a>
   <a href="https://github.com/NousResearch/hermes-agent"><img src="https://img.shields.io/badge/Hermes_Agent-v0.20%2B-orange.svg" alt="Hermes Agent" /></a>
   <a href="https://github.com/shali10/hermes-patches/pulls"><img src="https://img.shields.io/badge/PRs-welcome-green.svg" alt="PRs Welcome" /></a>
+</p>
+
+<p align="center">
+  <img src="docs/images/hermes_patches_showcase.png" alt="Hermes Patches v1.5.0 核心架构与 10 大生产级增强特性全景看板" width="100%" />
 </p>
 
 > 🧭 **快速导航**：[✨ 痛点对照](#features) · [🔍 效果实测](#showcase) · [🚀 一键安装](#installation) · [📦 补丁清单](#patches) · [❓ 排障FAQ](#faq) · [📝 更新日志](#changelog) · [↩️ 一键卸载](#uninstall)
@@ -25,7 +29,7 @@
 <a id="features"></a>
 ## ✨ 核心特性与生产痛点对照
 
-| 模块 | 官方原生状态 | 安装 hermes-patches (v1.4.0) 后 ✨ |
+| 模块 | 官方原生状态 | 安装 hermes-patches (v1.5.0) 后 ✨ |
 |---|---|---|
 | **📊 Token 消耗全透视** | 仅显示精简模型与百分比（`gpt-4o · 7%`） | **全指标精准展示**：Prompt 总量、缓存命中数及百分比、输出 Token、执行耗时、上下文占用（千分位格式化） |
 | **📑 Telegram 原生表格** | CJK 中文字符下 Markdown 表格易被拦截退化为无序列表 | **100% 放行原生 Pipe Table**，享受现代 Telegram 原生高保真表格渲染 |
@@ -36,6 +40,7 @@
 | **🧠 思考过程深度净化** | 推理模型输出冗长 `<think>` 刷屏，CLI 弹大窗，IM 偶发草稿泄露 | **全链路深度剥离所有思维链变体**（`<think>`, `<thought>`, `<antml:thought>` 及未闭合块），只留干净最终正文 |
 | **✂️ 4096 消息智能切分** | 超过 4096 字符时生硬截断，导致代码块破坏或报 `can't parse entities` | **优先在自然段落（`\n\n`）边界优雅切分**，自动闭合并补齐代码围栏与表格结构 |
 | **📁 失效目录自动回退** | 显式 workdir 被删除后执行命令报 `exit 126` 崩溃 | **自动回退到安全可用父目录**，消除临时目录删除引发的命令执行失败 |
+| **🧱 SQLite 主库防误删护栏** | Agent 执行自主系统清理时易误删 `state.db`，导致全部会话与状态断崖丢失 | **不可绕过的动作级防删安全地线**：硬核阻断 `rm / truncate / > / find-delete` 误删 live 活库，100% 允许只读查看与 `.bak` 备份清理 |
 | **⚙️ 零配置开箱即用** | 安装后需手动敲多条命令开启配置 | **自动校验并初始化 `config.yaml`**，页脚、参数与优化开箱即用，无需多余设置 |
 | **🔄 自动平滑重启生效** | 安装后需用户自行排查进程并手动重启 | **自动探测并平滑重启 `hermes-gateway` 服务**，一行命令瞬间全量生效 |
 | **🚀 升级自愈守护** | 升级 Hermes 源码或 `hermes update` 会丢失补丁 | **systemd `ExecStartPre` 自动守护**，版本更新后自动重应用，**升级永不失效** |
@@ -268,6 +273,7 @@ python3 hermes_patches.py --skip menu --auto-config --restart
 | `clean-think` | `think`, `reasoning`, `suppress-thinking` | `cli.py`<br>`gateway/stream_consumer.py` | 净化思考过程与变体标签，默认静音终端冗长思维链弹框 |
 | `smart-split` | `split`, `chunking`, `telegram-split` | `gateway/platforms/base.py` | 4096+ 长消息优先在自然段落切分，保护代码块与表格无损 |
 | `terminal-cwd` | `cwd`, `terminal`, `deleted-workdir` | `tools/environments/base.py` | 显式 workdir 被删除后，在构建命令 wrapper 前回退到可用父目录，避免 exit 126 |
+| `state-guard` | `db-guard`, `anti-delete`, `state-db-guard`, `guard` | `tools/approval.py` | 对 live state.db 注入动作级防删护栏，精准拦截 rm/truncate/>/find-delete 误删 |
 
 ---
 
@@ -307,6 +313,7 @@ python3 hermes_patches.py --skip menu --auto-config --restart
 
 | 版本 | 发布日期 | 重点更新摘要 | 详情链接 |
 |:---:|:---:|---|:---:|
+| **`v1.5.0`** | 2026-09-07 | **🧱 SQLite 主库动作级防删安全地线 (`state-guard`) + 全新新野兽派极客全景看板** | [查看详情 📄](CHANGELOG.md#v150---2026-09-07) |
 | **`v1.4.0`** | 2026-09-02 | **⚡ 多厂商全字段缓存解析 + 代理会话级智能前缀推导 + terminal-cwd 补丁 + PyPI 标准工程化** | [查看详情 📄](CHANGELOG.md#v140---2026-09-02) |
 | **`v1.3.8`** | 2026-08-29 | **🎯 Token 计量双路兼容 + 真实 Prompt 总量 (Input+Cache) 与缓存命中 100% 精确对齐** | [查看详情 📄](CHANGELOG.md#v137---2026-08-29) |
 | **`v1.3.0`** | 2026-08-29 | **🚀 零配置开箱即用 + 自动平滑重启 + 终极自适应寻径引擎 + 字节码全量清理** | [查看详情 📄](CHANGELOG.md#v130---2026-08-29) |

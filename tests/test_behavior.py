@@ -169,11 +169,36 @@ def main():
     # -------------------------------------------------------------
     # 9. Terminal CWD Recovery
     # -------------------------------------------------------------
-    print("Testing 9/9: Terminal CWD Recovery...")
+    print("Testing 9/10: Terminal CWD Recovery...")
     env_base_code = (target_dir / "tools/environments/base.py").read_text(encoding="utf-8")
     assert "_resolve_safe_cwd" in env_base_code, "Safe cwd recovery missing in tools/environments/base.py"
 
-    print("\n✅ All 9 patches successfully passed runtime behavioral assertions!")
+    # -------------------------------------------------------------
+    # 10. State DB Anti-Destruction Guard
+    # -------------------------------------------------------------
+    print("Testing 10/10: State DB Anti-Destruction Guard...")
+    approval_full_code = (target_dir / "tools/approval.py").read_text(encoding="utf-8")
+    assert "hermes-patches state-guard" in approval_full_code, "state-guard pattern missing in tools/approval.py"
+    from tools.approval import detect_hardline_command
+    # Dangerous commands targeting live state.db must be blocked unconditionally
+    is_blocked, desc = detect_hardline_command("rm /root/.hermes/state.db")
+    assert is_blocked, "rm state.db should be hardline-blocked"
+    assert "state.db" in str(desc), f"Unexpected description: {desc}"
+
+    is_blocked, desc = detect_hardline_command("truncate -s 0 ~/.hermes/state.db")
+    assert is_blocked, "truncate state.db should be hardline-blocked"
+
+    is_blocked, desc = detect_hardline_command("find /root/.hermes -name 'state.db' -delete")
+    assert is_blocked, "find-delete state.db should be hardline-blocked"
+
+    # Safe operations must NOT be blocked
+    is_blocked, desc = detect_hardline_command("sqlite3 /root/.hermes/state.db 'PRAGMA quick_check;'")
+    assert not is_blocked, f"sqlite3 read should NOT be hardline-blocked, got {desc}"
+
+    is_blocked, desc = detect_hardline_command("rm /root/.hermes/backups/state.db.bak")
+    assert not is_blocked, f"rm state.db.bak should NOT be hardline-blocked, got {desc}"
+
+    print("\n✅ All 10 patches successfully passed runtime behavioral assertions!")
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 from typing import Callable, List, Optional, Set, Tuple
 
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 
 
 PATCH_REGISTRY = [
@@ -89,6 +89,13 @@ PATCH_REGISTRY = [
         "name": "📁 Terminal 失效工作目录自动回退",
         "method": "patch_terminal_cwd_recovery",
         "description": "显式 workdir 被删除后，在构建命令 wrapper 前回退到可用父目录，避免 exit 126。",
+    },
+    {
+        "id": "state-guard",
+        "aliases": ["db-guard", "anti-delete", "state-db-guard", "guard"],
+        "name": "🧱 SQLite 主库防误删护栏 (State DB Anti-Destruction Guard)",
+        "method": "patch_state_db_guard",
+        "description": "对 live state.db 注入动作级防删护栏，精准拦截 rm/truncate/>/find-delete 误删，免除全量丢失风险。",
     },
 ]
 
@@ -214,14 +221,36 @@ class PatchEngine:
 def format_runtime_footer('''
                 cand = cand.replace("def format_runtime_footer(", helper, 1)
 
-            # 3. format_runtime_footer signature
-            old_sig = "    fields: Iterable[str] = _DEFAULT_FIELDS,\n) -> str:"
-            new_sig = "    fields: Iterable[str] = _DEFAULT_FIELDS,\n    prompt_tokens: Optional[int] = None,\n    output_tokens: Optional[int] = None,\n    cache_read_tokens: Optional[int] = None,\n) -> str:"
-            if "prompt_tokens: Optional[int] = None" not in cand and old_sig in cand:
-                cand = cand.replace(old_sig, new_sig, 1)
+            # 3. format_runtime_footer signature (supports multiline and singleline)
+            if "prompt_tokens: Optional[int] = None" not in cand:
+                old_sig = "    fields: Iterable[str] = _DEFAULT_FIELDS,\n) -> str:"
+                new_sig = "    fields: Iterable[str] = _DEFAULT_FIELDS,\n    prompt_tokens: Optional[int] = None,\n    output_tokens: Optional[int] = None,\n    cache_read_tokens: Optional[int] = None,\n) -> str:"
+                if old_sig in cand:
+                    cand = cand.replace(old_sig, new_sig, 1)
+                else:
+                    sig_pat = r'(\s*fields:\s*Iterable\[str\]\s*=\s*_DEFAULT_FIELDS\s*,?\s*\)\s*->\s*str:)'
+                    cand = re.sub(sig_pat, "\n" + new_sig, cand, count=1)
 
-            # 4. format fields mapping
-            new_loop = '''for field in fields:
+            # 4. format fields mapping (supports both legacy loop and new renderers dict)
+            if "🧠 Prompt总量" not in cand:
+                if "renderers = {" in cand:
+                    new_renderers_block = '''    _p_in = prompt_tokens or 0
+    _c_in = cache_read_tokens or 0
+    _total_prompt = _p_in if _p_in >= _c_in else _p_in + _c_in
+
+    renderers = {
+        "model": lambda: f"🤖 {_model_short(model)}" if _model_short(model) else "",
+        "context_pct": lambda: f"🎯 上下文: {context_pct()}" if context_pct() else "",
+        "latency": lambda: f"⏱️ 耗时: {turn_seconds:.1f}s" if turn_seconds is not None and turn_seconds >= 0 else "",
+        "elapsed_time": lambda: f"⏱️ 耗时: {turn_seconds:.1f}s" if turn_seconds is not None and turn_seconds >= 0 else "",
+        "cwd": lambda: _home_relative_cwd(cwd or _env_cwd()),
+        "prompt_tokens": lambda: f"🧠 Prompt总量: {_fmt_int(_total_prompt)}" if _total_prompt else "",
+        "output_tokens": lambda: f"📤 输出: {_fmt_int(output_tokens)}" if output_tokens else "",
+        "cache_read": lambda: f"💾 缓存命中: {_fmt_int(cache_read_tokens)} ({max(0, min(100, round((cache_read_tokens / _total_prompt) * 100)))}%)" if (_total_prompt and cache_read_tokens is not None and cache_read_tokens >= 0) else "",
+    }'''
+                    cand = re.sub(r'(\s*renderers\s*=\s*\{.*?\n\s*\})', "\n" + new_renderers_block, cand, count=1, flags=re.DOTALL)
+                else:
+                    new_loop = '''for field in fields:
         _p_in = prompt_tokens or 0
         _c_in = cache_read_tokens or 0
         _total_prompt = _p_in if _p_in >= _c_in else _p_in + _c_in
@@ -251,20 +280,27 @@ def format_runtime_footer('''
                 pct = max(0, min(100, round((cache_read_tokens / _total_prompt) * 100)))
                 parts.append(f"💾 缓存命中: {_fmt_int(cache_read_tokens)} ({pct}%)")'''
 
-            loop_pat = r'for field in fields:.*?(?=\s*# Unknown field names are silently ignored\.)'
-            if re.search(loop_pat, cand, flags=re.DOTALL):
-                cand = re.sub(loop_pat, new_loop, cand, count=1, flags=re.DOTALL)
+                    loop_pat = r'for field in fields:.*?(?=\s*# Unknown field names are silently ignored\.)'
+                    if re.search(loop_pat, cand, flags=re.DOTALL):
+                        cand = re.sub(loop_pat, new_loop, cand, count=1, flags=re.DOTALL)
 
             # 5. build_footer_line signature & invocation
             old_bf_sig = "def build_footer_line(\n    *,\n    user_config: dict[str, Any] | None,\n    platform_key: str | None,\n    model: Optional[str],\n    context_tokens: int,\n    context_length: Optional[int],\n    cwd: Optional[str] = None,\n    turn_seconds: Optional[float] = None,\n) -> str:"
             new_bf_sig = "def build_footer_line(\n    *,\n    user_config: dict[str, Any] | None,\n    platform_key: str | None,\n    model: Optional[str],\n    context_tokens: int,\n    context_length: Optional[int],\n    cwd: Optional[str] = None,\n    turn_seconds: Optional[float] = None,\n    prompt_tokens: Optional[int] = None,\n    output_tokens: Optional[int] = None,\n    cache_read_tokens: Optional[int] = None,\n    **kwargs: Any,\n) -> str:"
             if old_bf_sig in cand:
                 cand = cand.replace(old_bf_sig, new_bf_sig, 1)
+            elif "prompt_tokens: Optional[int] = None" not in cand.split("def build_footer_line")[-1]:
+                bf_sig_pat = r'(def build_footer_line\([^)]*turn_seconds:\s*Optional\[float\]\s*=\s*None\s*,?\s*\)\s*->\s*str:)'
+                cand = re.sub(bf_sig_pat, new_bf_sig, cand, count=1)
 
             old_bf_call = '        fields=cfg.get("fields") or _DEFAULT_FIELDS,\n    )'
             new_bf_call = '        fields=cfg.get("fields") or _DEFAULT_FIELDS,\n        prompt_tokens=prompt_tokens,\n        output_tokens=output_tokens,\n        cache_read_tokens=cache_read_tokens,\n    )'
-            if "prompt_tokens=prompt_tokens," not in cand and old_bf_call in cand:
-                cand = cand.replace(old_bf_call, new_bf_call, 1)
+            if "prompt_tokens=prompt_tokens," not in cand:
+                if old_bf_call in cand:
+                    cand = cand.replace(old_bf_call, new_bf_call, 1)
+                else:
+                    bf_call_pat = r'(fields=cfg\.get\("fields"\)\s*or\s*_DEFAULT_FIELDS\s*,?\s*\))'
+                    cand = re.sub(bf_call_pat, new_bf_call.strip(), cand, count=1)
 
             # 6. Default fields and default enabled in resolve_footer_config
             old_df = '_DEFAULT_FIELDS: tuple[str, ...] = ("model", "context_pct", "cwd")'
@@ -912,6 +948,51 @@ def format_runtime_footer('''
             "tools/environments/base.py",
             transform_base_env,
             "📁 Terminal 失效工作目录自动回退",
+        )
+
+    # -------------------------------------------------------------
+    # Patch 10: State DB Anti-Destruction Guard
+    # -------------------------------------------------------------
+    def patch_state_db_guard(self) -> bool:
+        def transform_approval(src: str) -> str:
+            cand = src
+            marker = "# hermes-patches state-guard"
+            if marker in cand:
+                return cand
+
+            old_anchor = """    (_CMDPOS + r'systemctl\\s+(poweroff|reboot|halt|kexec)\\b', "systemctl poweroff/reboot"),
+    (_CMDPOS + r'telinit\\s+[06]\\b', "telinit 0/6 (shutdown/reboot)"),
+]"""
+            new_patterns = """    (_CMDPOS + r'systemctl\\s+(poweroff|reboot|halt|kexec)\\b', "systemctl poweroff/reboot"),
+    (_CMDPOS + r'telinit\\s+[06]\\b', "telinit 0/6 (shutdown/reboot)"),
+    # hermes-patches state-guard
+    # Action-anchored floor preventing accidental deletion/truncation of live state.db
+    (_CMDPOS + r'(?:rm|unlink|truncate)\\b[^\\n]*\\b(?:\\S*\\/)?state\\.db(?:-(?:wal|shm|journal))?(?![A-Za-z0-9_.])', "destructive operation targeting live Hermes database (state.db)"),
+    (r'(?:>|>>)\\s*(?:\\S*\\/)?state\\.db(?:-(?:wal|shm|journal))?(?![A-Za-z0-9_.])', "truncate/overwrite of live Hermes database (state.db)"),
+    (_CMDPOS + r'find\\b[^\\n]*state\\.db[^\\n]*(?:-delete|-exec\\s+rm)\\b', "find-delete targeting live Hermes database (state.db)"),
+    (_CMDPOS + r'mv\\b[^\\n]*\\b(?:\\S*\\/)?state\\.db(?:-(?:wal|shm|journal))?(?![A-Za-z0-9_.])\\s+', "moving live Hermes database (state.db)"),
+]"""
+            if old_anchor in cand:
+                cand = cand.replace(old_anchor, new_patterns, 1)
+
+            old_quote_mask = """_QUOTE_MASKED_HARDLINE_DESCRIPTIONS = frozenset({
+    "redirect to raw block device",
+    "fork bomb",
+})"""
+            new_quote_mask = """_QUOTE_MASKED_HARDLINE_DESCRIPTIONS = frozenset({
+    "redirect to raw block device",
+    "fork bomb",
+    "truncate/overwrite of live Hermes database (state.db)",
+})"""
+            if old_quote_mask in cand:
+                cand = cand.replace(old_quote_mask, new_quote_mask, 1)
+
+            return cand
+
+        return self.apply_file_patch(
+            "tools/approval.py",
+            transform_approval,
+            "🧱 SQLite 主库防误删护栏",
         )
 
     # -------------------------------------------------------------
