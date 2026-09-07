@@ -8,15 +8,18 @@
 ## [v1.5.0] - 2026-09-07
 
 ### 🧱 核心里程碑：SQLite 主库防误删护栏与 Neo-Brutalist 极客视觉升级 (State DB Anti-Destruction Guard)
-- **新增第 10 项生产级杀手补丁 `state-guard`（`tools/approval.py`）**：
+- **新增第 10 项生产级杀手补丁 `state-guard`（`tools/approval.py` / `tools/approval_detection.py`）**：
   - 对 live `state.db`（以及 `-wal`, `-shm`, `-journal`）注入不可绕过的 `HARDLINE_PATTERNS` 动作级防删安全地线；
   - 精准阻断 Agent 自主执行系统清理时可能触发的 `rm /path/to/state.db`、`unlink`、`truncate -s 0`、`> / >>` 覆盖截断、`find -delete / -exec rm` 以及 `mv state.db` 等破坏性命令；
   - 采用精确的负向前瞻 `(?![A-Za-z0-9_.])`，严格区分生产活库与备份文件，100% 允许合法的 `.bak`、`.corrupt`、`.old`、`.gz` 文件清理以及 `sqlite3 .backup`、`sqlite3 PRAGMA`、`ls`、`grep` 等只读/备份操作；
   - 即使开启 `--yolo` 模式，硬核护栏依旧生效，彻底免除运维与自动化清理过程中的误删库恐慌。
+- **深度适配上游模块化大拆分与双向自适应**：
+  - 全面支持上游最新解耦拆分（`commands_platforms.py`、`hermes_state_wal.py`、`hermes_state_messages.py`、`run_turn_runner.py`、`cli_stream_mixin.py`、`stream_consumer_think.py`、`approval_detection.py`）；
+  - 具备全智能自适应寻径引擎，老版本单体架构与最新模块化架构均能一键无缝安装与打补丁。
 - **全新新野兽派 (Neo-Brutalism) 架构与特性全景图**：
   - 官方视觉全面升级，引入高对比度、硬边框、警示黄横幅的新野兽派架构全景看板，完整呈现 10 大补丁的痛点-根因-根治矩阵。
-- **测试套件扩充**：
-  - `tests/test_behavior.py` 补充第 10 项针对 `state-guard` 的全量运行时行为断言与安全边界用例，10 项测试 100% 通过。
+- **测试套件扩充与自动化 CI 全面绿标**：
+  - `tests/test_behavior.py` 扩充至 10 项全量运行时行为断言与安全边界用例，在上游最新代码库上 10/10 自动化秒级通过。
 - **交互式菜单扩展**：
   - `install.sh` 扩充交互式数字选项至 10 个独立补丁选项及 14 个操作控制项。
 
