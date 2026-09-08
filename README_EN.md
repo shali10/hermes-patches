@@ -251,7 +251,7 @@ docker restart <container_name>
 
 | Version | Date | Highlights | Details |
 |:---:|:---:|---|:---:|
-| **`v1.6.0`** | 2026-09-08 | **🎛️ Community Feedback: Interactive multi-select installation (indices/ranges) + Live patch status probing (`--status`)** | [View 📄](CHANGELOG.md#v160---2026-09-08) |
+| **`v1.6.0`** | 2026-09-08 | **🎛️ Interactive in-place multi-select installation (indices/ranges) + Live patch status display (`--status`)** | [View 📄](CHANGELOG.md#v160---2026-09-08) |
 | **`v1.5.0`** | 2026-09-07 | **🧱 SQLite state.db action-anchored anti-destruction floor (`state-guard`) + Neo-Brutalist showcase banner** | [View 📄](CHANGELOG.md#v150---2026-09-07) |
 | **`v1.4.0`** | 2026-09-02 | **⚡ Multi-vendor cache parsing + adaptive prefix derivation + terminal-cwd patch + PyPI packaging** | [View 📄](CHANGELOG.md#v140---2026-09-02) |
 | **`v1.3.8`** | 2026-08-29 | **🎯 Dual-path token resolution + true Prompt Total (Input+Cache) & KV cache hit rate alignment** | [View 📄](CHANGELOG.md#v137---2026-08-29) |
