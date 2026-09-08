@@ -430,8 +430,8 @@ read_prompt() {
     local input_val=""
     if [ -t 0 ]; then
         read -r -p "$prompt_msg" input_val || return 1
-    elif [ -c /dev/tty ] 2>/dev/null; then
-        read -r -p "$prompt_msg" input_val < /dev/tty 2>/dev/null || return 1
+    elif (exec < /dev/tty) 2>/dev/null; then
+        read -r -p "$prompt_msg" input_val 2>/dev/null < /dev/tty || return 1
     else
         return 1
     fi
@@ -444,7 +444,7 @@ read_prompt() {
 IS_INTERACTIVE=false
 if [ -t 0 ]; then
     IS_INTERACTIVE=true
-elif [ -c /dev/tty ] 2>/dev/null; then
+elif (exec < /dev/tty) 2>/dev/null; then
     IS_INTERACTIVE=true
 fi
 
