@@ -396,7 +396,7 @@ parse_selection_tokens() {
 show_menu() {
     clear 2>/dev/null || true
     echo -e "${BOLD}${CYAN}=====================================================${NC}"
-    echo -e "${BOLD}${BLUE}   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.6.0)   ${NC}"
+    echo -e "${BOLD}${BLUE}   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.6.1)   ${NC}"
     echo -e "${BOLD}${CYAN}=====================================================${NC}"
     if [ "$APPLIED_COUNT" -gt 0 ] 2>/dev/null; then
         echo -e " 目标路径: ${GREEN}${HERMES_DIR}${NC}  ${BOLD}(补丁状态: ${GREEN}${APPLIED_COUNT}${NC}/${TOTAL_COUNT} 已应用)${NC}\n"
@@ -423,71 +423,128 @@ show_menu() {
     echo -e "${BOLD}${CYAN}=====================================================${NC}"
 }
 
-detect_patches_status
-show_menu
+read_prompt() {
+    local prompt_msg="$1"
+    local var_name="$2"
+    local default_val="$3"
+    local input_val=""
+    if [ -t 0 ]; then
+        read -r -p "$prompt_msg" input_val || return 1
+    elif [ -c /dev/tty ] 2>/dev/null; then
+        read -r -p "$prompt_msg" input_val < /dev/tty 2>/dev/null || return 1
+    else
+        return 1
+    fi
+    input_val="${input_val:-$default_val}"
+    printf -v "$var_name" '%s' "$input_val"
+    return 0
+}
 
-# Read user input safely from TTY
-CHOICE=""
+# 判断是否具备交互式终端输入能力 (TTY 或 /dev/tty)
+IS_INTERACTIVE=false
 if [ -t 0 ]; then
-    read -r -p "请输入选项编号 (直接多选如 2 3 7、2,3,7 或 2-5) [默认: 1]: " CHOICE || CHOICE="1"
-elif (exec < /dev/tty) 2>/dev/null; then
-    read -r -p "请输入选项编号 (单选/多选如 2 3 7 或 2-5/按0退出) [默认: 1]: " CHOICE < /dev/tty || CHOICE="1"
-else
-    CHOICE="1"
-    echo -e "非交互式终端环境，默认执行: [1] 全量一键安装、自动配置并平滑重启"
+    IS_INTERACTIVE=true
+elif [ -c /dev/tty ] 2>/dev/null; then
+    IS_INTERACTIVE=true
 fi
 
-CHOICE="${CHOICE:-1}"
-echo ""
+# 非交互式终端环境 (如自动化脚本/容器无 TTY 管道构建)：默认执行全量安装一次后退出
+if [ "$IS_INTERACTIVE" = false ]; then
+    echo -e "非交互式终端环境，默认执行: [1] 全量一键安装、自动配置并平滑重启\n"
+    setup_systemd_hook
+    "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --auto-config --restart --verbose
+    echo -e "\n${BOLD}${GREEN}🎉 补丁操作已全部完成并实时生效！${NC}\n"
+    detect_and_report_daemon
+    exit 0
+fi
 
-case "$CHOICE" in
-    1)
-        echo -e "${BLUE}正在全量应用所有增强补丁、自动配置并平滑重启...${NC}\n"
-        setup_systemd_hook
-        "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --auto-config --restart --verbose
-        ;;
-    12)
-        echo -e "${YELLOW}正在执行 Dry-Run 预检分析...${NC}\n"
-        "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --dry-run --verbose
-        exit 0
-        ;;
-    13)
-        do_uninstall
-        ;;
-    14)
-        echo -e "${BOLD}${BLUE}=== 运行 hermes-patches 行为断言测试套件 ===${NC}\n"
-        "$PYTHON_BIN" "$SCRIPT_DIR/tests/test_behavior.py" --target "$HERMES_DIR"
-        exit 0
-        ;;
-    0|q|Q|exit)
+# 交互式控制台主会话循环 (Main Interactive Menu Loop)
+while true; do
+    detect_patches_status
+    show_menu
+
+    CHOICE=""
+    if ! read_prompt "请输入选项编号 (直接多选如 2 3 7、2,3,7 或 2-5) [默认: 1]: " CHOICE "1"; then
+        echo -e "\n${YELLOW}已退出操作。${NC}"
+        break
+    fi
+
+    CHOICE="${CHOICE:-1}"
+    echo ""
+
+    case "$CHOICE" in
+        0|q|Q|exit)
+            echo -e "${YELLOW}已退出操作。${NC}"
+            exit 0
+            ;;
+        1)
+            echo -e "${BLUE}正在全量应用所有增强补丁、自动配置并平滑重启...${NC}\n"
+            setup_systemd_hook
+            "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --auto-config --restart --verbose
+            echo -e "\n${BOLD}${GREEN}🎉 补丁操作已全部完成并实时生效！${NC}\n"
+            detect_and_report_daemon
+            ;;
+        12)
+            echo -e "${YELLOW}正在执行 Dry-Run 预检分析...${NC}\n"
+            "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --dry-run --verbose
+            ;;
+        13)
+            do_uninstall
+            echo -e "\n${BOLD}${GREEN}🎉 卸载与还原操作已完成！${NC}\n"
+            detect_and_report_daemon
+            ;;
+        14)
+            echo -e "${BOLD}${BLUE}=== 运行 hermes-patches 行为断言测试套件 ===${NC}\n"
+            TEST_RUNNER="$SCRIPT_DIR/tests/test_behavior.py"
+            if [ ! -f "$TEST_RUNNER" ]; then
+                t_dir="${TEMP_DIR:-$(mktemp -d)}"
+                TEMP_TEST="$t_dir/test_behavior.py"
+                curl -fsSL "https://raw.githubusercontent.com/shali10/hermes-patches/main/tests/test_behavior.py?nocache=$(date +%s)" -o "$TEMP_TEST" 2>/dev/null || true
+                TEST_RUNNER="$TEMP_TEST"
+            fi
+            if [ -f "$TEST_RUNNER" ]; then
+                "$PYTHON_BIN" "$TEST_RUNNER" --target "$HERMES_DIR"
+            else
+                echo -e "${RED}无法加载测试套件脚本。${NC}"
+            fi
+            ;;
+        *)
+            mapfile -t PARSED_NUMS < <(parse_selection_tokens "$CHOICE")
+            if [ "${#PARSED_NUMS[@]}" -eq 0 ]; then
+                echo -e "${RED}输入无效或未匹配到任何可用补丁编号。${NC}\n"
+            else
+                SELECTED_PATCHES=()
+                echo -e "${BOLD}${CYAN}-----------------------------------------------------${NC}"
+                echo -e "${BOLD}${BLUE}🎯 直接选中以下 ${#PARSED_NUMS[@]} 项补丁开始安装：${NC}"
+                for num in "${PARSED_NUMS[@]}"; do
+                    p_id=$(map_num_to_patch "$num")
+                    if [ -n "$p_id" ]; then
+                        SELECTED_PATCHES+=("$p_id")
+                        p_name=$(get_patch_name_by_num "$num")
+                        s_badge=$(get_status_badge "$num")
+                        echo -e "  • [${num}]  ${s_badge}  ${p_name}"
+                    fi
+                done
+                echo -e "${BOLD}${CYAN}-----------------------------------------------------${NC}\n"
+
+                setup_systemd_hook
+                "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --only "${SELECTED_PATCHES[@]}" --auto-config --restart --verbose
+                echo -e "\n${BOLD}${GREEN}🎉 补丁操作已全部完成并实时生效！${NC}\n"
+                detect_and_report_daemon
+            fi
+            ;;
+    esac
+
+    # 循环底部提示：允许用户按回车刷新并返回主菜单，或输入 0 / q 优雅退出
+    echo ""
+    NEXT_ACTION=""
+    if ! read_prompt "按回车键返回主菜单，或输入 0 退出: " NEXT_ACTION ""; then
+        echo -e "\n${YELLOW}已退出操作。${NC}"
+        break
+    fi
+
+    if [[ "$NEXT_ACTION" =~ ^(0|q|Q|exit)$ ]]; then
         echo -e "${YELLOW}已退出操作。${NC}"
         exit 0
-        ;;
-    *)
-        mapfile -t PARSED_NUMS < <(parse_selection_tokens "$CHOICE")
-        if [ "${#PARSED_NUMS[@]}" -eq 0 ]; then
-            echo -e "${RED}输入无效或未匹配到任何可用补丁编号。已退出。${NC}\n"
-            exit 1
-        fi
-
-        SELECTED_PATCHES=()
-        echo -e "${BOLD}${CYAN}-----------------------------------------------------${NC}"
-        echo -e "${BOLD}${BLUE}🎯 直接选中以下 ${#PARSED_NUMS[@]} 项补丁开始安装：${NC}"
-        for num in "${PARSED_NUMS[@]}"; do
-            p_id=$(map_num_to_patch "$num")
-            if [ -n "$p_id" ]; then
-                SELECTED_PATCHES+=("$p_id")
-                p_name=$(get_patch_name_by_num "$num")
-                s_badge=$(get_status_badge "$num")
-                echo -e "  • [${num}]  ${s_badge}  ${p_name}"
-            fi
-        done
-        echo -e "${BOLD}${CYAN}-----------------------------------------------------${NC}\n"
-
-        setup_systemd_hook
-        "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --only "${SELECTED_PATCHES[@]}" --auto-config --restart --verbose
-        ;;
-esac
-
-echo -e "\n${BOLD}${GREEN}🎉 补丁操作已全部完成并实时生效！${NC}\n"
-detect_and_report_daemon
+    fi
+done

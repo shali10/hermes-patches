@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 import json
 
-__version__ = "1.6.0"
+__version__ = "1.6.1"
 
 
 PATCH_REGISTRY = [
@@ -1661,12 +1661,6 @@ def restart_gateway_services(target_dir: Optional[Path] = None) -> bool:
 
 def run_interactive_cli(target: Path):
     """Interactive console menu for selecting and installing patches."""
-    engine = PatchEngine(target_dir=target, dry_run=True, verbose=False)
-    statuses = engine.check_all_statuses()
-    applied_cnt = sum(1 for s in statuses if s["applied"])
-    total_cnt = len(statuses)
-    status_map = {s["num"]: s for s in statuses}
-
     C_BOLD = "\033[1m"
     C_BLUE = "\033[34m"
     C_GREEN = "\033[32m"
@@ -1674,71 +1668,83 @@ def run_interactive_cli(target: Path):
     C_CYAN = "\033[36m"
     C_RESET = "\033[0m"
 
-    print(f"{C_BOLD}{C_CYAN}====================================================={C_RESET}")
-    print(f"{C_BOLD}{C_BLUE}   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.6.0)   {C_RESET}")
-    print(f"{C_BOLD}{C_CYAN}====================================================={C_RESET}")
-    print(f" 目标路径: {C_GREEN}{target}{C_RESET}  {C_BOLD}(补丁状态: {C_GREEN}{applied_cnt}{C_RESET}/{total_cnt} 已应用){C_RESET}\n")
-    print(f" {C_BOLD}{C_GREEN}[1]  🚀 全量一键安装、自动配置并平滑重启 (推荐 / 直接回车){C_RESET}")
-    print(" ---------------------------------------------------")
-    for s in statuses:
-        tag = f"{C_GREEN}[已应用 ✓]{C_RESET}" if s["applied"] else f"{C_YELLOW}[未应用 -]{C_RESET}"
-        print(f" [{s['num']:>2}]  {tag}  {s['name']}")
-    print(" ---------------------------------------------------")
-    print(" [12] 🔍 预览变更 (Dry Run，不写入磁盘)")
-    print(" [0]  🚪 退出脚本")
-    print(f"{C_BOLD}{C_CYAN}====================================================={C_RESET}")
+    while True:
+        engine = PatchEngine(target_dir=target, dry_run=True, verbose=False)
+        statuses = engine.check_all_statuses()
+        applied_cnt = sum(1 for s in statuses if s["applied"])
+        total_cnt = len(statuses)
+        status_map = {s["num"]: s for s in statuses}
 
-    try:
-        choice = input("\n请输入选项编号 (直接多选如 2 3 7、2,3,7 或 2-5) [默认: 1]: ").strip()
-    except (EOFError, KeyboardInterrupt):
-        print("\n已退出。")
-        return
+        print(f"{C_BOLD}{C_CYAN}====================================================={C_RESET}")
+        print(f"{C_BOLD}{C_BLUE}   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.6.1)   {C_RESET}")
+        print(f"{C_BOLD}{C_CYAN}====================================================={C_RESET}")
+        print(f" 目标路径: {C_GREEN}{target}{C_RESET}  {C_BOLD}(补丁状态: {C_GREEN}{applied_cnt}{C_RESET}/{total_cnt} 已应用){C_RESET}\n")
+        print(f" {C_BOLD}{C_GREEN}[1]  🚀 全量一键安装、自动配置并平滑重启 (推荐 / 直接回车){C_RESET}")
+        print(" ---------------------------------------------------")
+        for s in statuses:
+            tag = f"{C_GREEN}[已应用 ✓]{C_RESET}" if s["applied"] else f"{C_YELLOW}[未应用 -]{C_RESET}"
+            print(f" [{s['num']:>2}]  {tag}  {s['name']}")
+        print(" ---------------------------------------------------")
+        print(" [12] 🔍 预览变更 (Dry Run，不写入磁盘)")
+        print(" [0]  🚪 退出脚本")
+        print(f"{C_BOLD}{C_CYAN}====================================================={C_RESET}")
 
-    if not choice:
-        choice = "1"
+        try:
+            choice = input("\n请输入选项编号 (直接多选如 2 3 7、2,3,7 或 2-5) [默认: 1]: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n已退出。")
+            break
 
-    if choice == "0":
-        print("已退出操作。")
-        return
+        if not choice:
+            choice = "1"
 
-    if choice == "1":
-        print("\n🚀 正在全量应用所有增强补丁、自动配置并平滑重启...")
-        exec_engine = PatchEngine(target_dir=target, dry_run=False, verbose=True)
-        exec_engine.run_all()
-        ensure_runtime_config(dry_run=False)
-        restart_gateway_services(target_dir=target)
-        return
+        if choice in ("0", "q", "Q", "exit"):
+            print("已退出操作。")
+            break
 
-    if choice == "12":
-        print("\n🔍 正在执行 Dry-Run 预检分析...")
-        exec_engine = PatchEngine(target_dir=target, dry_run=True, verbose=True)
-        exec_engine.run_all()
-        return
+        if choice == "1":
+            print("\n🚀 正在全量应用所有增强补丁、自动配置并平滑重启...")
+            exec_engine = PatchEngine(target_dir=target, dry_run=False, verbose=True)
+            exec_engine.run_all()
+            ensure_runtime_config(dry_run=False)
+            restart_gateway_services(target_dir=target)
+            print(f"\n{C_BOLD}{C_GREEN}🎉 全量补丁已全部处理完毕并生效！{C_RESET}\n")
+        elif choice == "12":
+            print("\n🔍 正在执行 Dry-Run 预检分析...")
+            exec_engine = PatchEngine(target_dir=target, dry_run=True, verbose=True)
+            exec_engine.run_all()
+        else:
+            resolved_ids = expand_selection_tokens([choice])
+            if not resolved_ids:
+                print("\n❌ 未识别到有效的补丁编号。")
+            else:
+                selected_meta = [p for p in PATCH_REGISTRY if p["id"] in resolved_ids]
+                if not selected_meta:
+                    print("\n❌ 未找到匹配的补丁模块。")
+                else:
+                    print(f"\n{C_BOLD}{C_CYAN}-----------------------------------------------------{C_RESET}")
+                    print(f"{C_BOLD}{C_BLUE}🎯 直接选中以下 {len(selected_meta)} 项补丁开始安装：{C_RESET}")
+                    for p in selected_meta:
+                        p_st = status_map.get(p["num"], {})
+                        tag = f"{C_GREEN}[已应用 ✓]{C_RESET}" if p_st.get("applied") else f"{C_YELLOW}[未应用 -]{C_RESET}"
+                        print(f"  • [{p['num']:>2}]  {tag}  {p['name']}")
+                    print(f"{C_BOLD}{C_CYAN}-----------------------------------------------------{C_RESET}\n")
 
-    resolved_ids = expand_selection_tokens([choice])
-    if not resolved_ids:
-        print("\n❌ 未识别到有效的补丁编号，已退出。")
-        return
+                    print("🚀 正在应用选定补丁...")
+                    exec_engine = PatchEngine(target_dir=target, dry_run=False, verbose=True, only=list(resolved_ids))
+                    exec_engine.run_all()
+                    ensure_runtime_config(dry_run=False)
+                    restart_gateway_services(target_dir=target)
+                    print(f"\n{C_BOLD}{C_GREEN}🎉 选定补丁已全部处理完毕并生效！{C_RESET}\n")
 
-    selected_meta = [p for p in PATCH_REGISTRY if p["id"] in resolved_ids]
-    if not selected_meta:
-        print("\n❌ 未找到匹配的补丁模块，已退出。")
-        return
-
-    print(f"\n{C_BOLD}{C_CYAN}-----------------------------------------------------{C_RESET}")
-    print(f"{C_BOLD}{C_BLUE}🎯 直接选中以下 {len(selected_meta)} 项补丁开始安装：{C_RESET}")
-    for p in selected_meta:
-        p_st = status_map.get(p["num"], {})
-        tag = f"{C_GREEN}[已应用 ✓]{C_RESET}" if p_st.get("applied") else f"{C_YELLOW}[未应用 -]{C_RESET}"
-        print(f"  • [{p['num']:>2}]  {tag}  {p['name']}")
-    print(f"{C_BOLD}{C_CYAN}-----------------------------------------------------{C_RESET}\n")
-
-    print("🚀 正在应用选定补丁...")
-    exec_engine = PatchEngine(target_dir=target, dry_run=False, verbose=True, only=list(resolved_ids))
-    exec_engine.run_all()
-    ensure_runtime_config(dry_run=False)
-    restart_gateway_services(target_dir=target)
-    print(f"\n{C_BOLD}{C_GREEN}🎉 选定补丁已全部处理完毕并生效！{C_RESET}\n")
+        try:
+            next_action = input("\n按回车键返回主菜单，或输入 0 退出: ").strip()
+            if next_action in ("0", "q", "Q", "exit"):
+                print("已退出操作。")
+                break
+        except (EOFError, KeyboardInterrupt):
+            print("\n已退出。")
+            break
 
 
 def main():

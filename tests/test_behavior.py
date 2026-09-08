@@ -232,7 +232,7 @@ def main():
     # -------------------------------------------------------------
     # 11. Multi-selection Token Expansion & Status Probing (v1.6.0)
     # -------------------------------------------------------------
-    print("Testing 11/11: Multi-selection Expansion & Status Probing (v1.6.0)...")
+    print("Testing 11/12: Multi-selection Expansion & Status Probing (v1.6.0)...")
     repo_root = Path(__file__).resolve().parent.parent
     sys.path.insert(0, str(repo_root))
     import hermes_patches
@@ -249,7 +249,25 @@ def main():
     assert len(statuses) == 10, f"Expected 10 patches, got {len(statuses)}"
     assert all(s["applied"] for s in statuses), "Target directory should have all 10 patches applied"
 
-    print("\n✅ All patches and v1.6.0 features successfully passed behavioral assertions!")
+    # -------------------------------------------------------------
+    # 12. Interactive Console Main Loop & Session Flow (v1.6.1)
+    # -------------------------------------------------------------
+    print("Testing 12/12: Interactive Console Main Loop & Session Flow (v1.6.1)...")
+    from unittest.mock import patch as mock_patch
+
+    # Test 12a: Option 0 directly exits
+    with mock_patch("builtins.input", side_effect=["0"]):
+        hermes_patches.run_interactive_cli(target_dir)
+
+    # Test 12b: Option 12 (Dry Run), prompt 0 exits
+    with mock_patch("builtins.input", side_effect=["12", "0"]):
+        hermes_patches.run_interactive_cli(target_dir)
+
+    # Test 12c: Option 12 (Dry Run), prompt Enter loops back, then q exits
+    with mock_patch("builtins.input", side_effect=["12", "", "q"]):
+        hermes_patches.run_interactive_cli(target_dir)
+
+    print("\n✅ All patches and v1.6.1 features successfully passed behavioral assertions!")
 
 
 
