@@ -208,9 +208,9 @@ curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install
 
 ---
 
-### 选项 C：交互式中文数字菜单
+### 选项 C：交互式中文控制台（支持多选与状态透视）
 
-直接在终端运行 `install.sh` 即可打开中文交互式控制台：
+直接在终端运行 `install.sh` 或 Python 命令 `hermes-patches` 即可打开交互式控制台：
 
 ```bash
 git clone https://github.com/shali10/hermes-patches.git
@@ -220,22 +220,22 @@ bash install.sh
 
 ```text
 =====================================================
-   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.5.0)   
+   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.6.0)   
 =====================================================
- 目标路径: /usr/local/lib/hermes-agent
+ 目标路径: /usr/local/lib/hermes-agent  (补丁状态: 10/10 已应用)
 
- [1] 🚀 全量一键安装、自动配置并平滑重启 (推荐 / 直接回车)
+ [1]  🚀 全量一键安装、自动配置并平滑重启 (推荐 / 直接回车)
  ---------------------------------------------------
- [2] 📊 Runtime Footer (Token 全量计量、缓存与耗时)
- [3] 📑 Telegram CJK 原生 Markdown 表格放行
- [4] 🇨🇳 Telegram 快捷菜单与 /help /commands 全中文汉化
- [5] 🛡️ SQLite 生产级外键自愈与高并发防锁死
- [6] ⚡ Tirith 低风险扫描审批免打扰
- [7] 🚫 流式输出静默控制与 429 频控防护
- [8] 🧠 全链路深度思考过程强力净化
- [9] ✂️ Telegram 4096 长消息智能段落切分
- [10] 📁 Terminal 失效工作目录自动回退
- [11] 🧱 SQLite 主库防误删护栏
+ [2]  [已应用 ✓]  📊 Runtime Footer (Token 全量计量、缓存与耗时)
+ [3]  [已应用 ✓]  📑 Telegram CJK 原生 Markdown 表格放行
+ [4]  [已应用 ✓]  🇨🇳 Telegram 快捷菜单与 /help /commands 全中文汉化
+ [5]  [已应用 ✓]  🛡️ SQLite 生产级外键自愈与高并发防锁死
+ [6]  [已应用 ✓]  ⚡ Tirith 低风险扫描审批免打扰
+ [7]  [已应用 ✓]  🚫 流式输出静默控制与 429 频控防护
+ [8]  [已应用 ✓]  🧠 全链路深度思考过程强力净化
+ [9]  [已应用 ✓]  ✂️ Telegram 4096 长消息智能段落切分
+ [10] [已应用 ✓]  📁 Terminal 失效工作目录自动回退
+ [11] [已应用 ✓]  🧱 SQLite 主库防误删护栏
  ---------------------------------------------------
  [12] 🔍 预览变更 (Dry Run，不写入磁盘)
  [13] ↩️ 卸载补丁并无损还原 (.bak 原生回滚)
@@ -243,19 +243,28 @@ bash install.sh
  [0]  🚪 退出脚本
 =====================================================
 ```
+> 💡 **操作贴士**：
+> - **实时状态透视**：每个补丁前面直观标出 `[已应用 ✓]` 或 `[未应用 -]`，哪些已刷入、哪些待安装一目了然；
+> - **零跳转直接多选**：无需跳转二级菜单，在主界面输入框直接输入多个编号（如 `2 3 7` 或 `2,3,7`）或范围语法（如 `2-5`），按回车直接一步到位安装并平滑重启！
 
 ---
 
 ### 选项 D：进阶命令行参数 (Advanced CLI Flags)
 
 ```bash
-# 1. 预览即将执行的改动 (Dry Run，不写入磁盘)
+# 1. 检测目标环境所有补丁的实际应用状态
+python3 hermes_patches.py --status
+# (输出结构化 JSON)
+python3 hermes_patches.py --status --json
+
+# 2. 预览即将执行的改动 (Dry Run，不写入磁盘)
 python3 hermes_patches.py --dry-run -v
 
-# 2. 仅应用特定补丁（如：流式控制、思考净化、表格放行）并自动配置重启
-python3 hermes_patches.py --only nostream clean-think table --auto-config --restart
+# 3. 仅应用特定补丁（支持补丁名称、数字编号与范围，如 2 3 7 或 2-5）并自动配置重启
+python3 hermes_patches.py --only 2 3 7 --auto-config --restart
+python3 hermes_patches.py --only 2-5 nostream --auto-config --restart
 
-# 3. 应用除中文菜单外的所有补丁
+# 4. 跳过特定补丁模块
 python3 hermes_patches.py --skip menu --auto-config --restart
 ```
 
@@ -315,6 +324,7 @@ python3 hermes_patches.py --skip menu --auto-config --restart
 
 | 版本 | 发布日期 | 重点更新摘要 | 详情链接 |
 |:---:|:---:|---|:---:|
+| **`v1.6.0`** | 2026-09-08 | **🎛️ 社区反馈驱动升级：交互控制台支持多选安装（编号/范围） + 补丁应用状态实时透视 (`--status`)** | [查看详情 📄](CHANGELOG.md#v160---2026-09-08) |
 | **`v1.5.0`** | 2026-09-07 | **🧱 SQLite 主库动作级防删安全地线 (`state-guard`) + 全新新野兽派极客全景看板** | [查看详情 📄](CHANGELOG.md#v150---2026-09-07) |
 | **`v1.4.0`** | 2026-09-02 | **⚡ 多厂商全字段缓存解析 + 代理会话级智能前缀推导 + terminal-cwd 补丁 + PyPI 标准工程化** | [查看详情 📄](CHANGELOG.md#v140---2026-09-02) |
 | **`v1.3.8`** | 2026-08-29 | **🎯 Token 计量双路兼容 + 真实 Prompt 总量 (Input+Cache) 与缓存命中 100% 精确对齐** | [查看详情 📄](CHANGELOG.md#v137---2026-08-29) |

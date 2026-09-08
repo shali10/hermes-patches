@@ -21,83 +21,149 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Callable, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
+import json
 
-__version__ = "1.5.0"
+__version__ = "1.6.0"
 
 
 PATCH_REGISTRY = [
     {
         "id": "footer",
-        "aliases": ["runtime-footer", "token", "tokens", "stats"],
+        "num": 2,
+        "aliases": ["runtime-footer", "token", "tokens", "stats", "2", "patch-2"],
         "name": "📊 Runtime Footer (Token全量计量/缓存命中/耗时)",
         "method": "patch_runtime_footer",
         "description": "在消息页脚展示 Prompt 总量、缓存命中数及百分比、输出 Token、上下文比例与执行耗时。",
     },
     {
         "id": "table",
-        "aliases": ["cjk-table", "telegram-table", "telegram-rich", "pipe-table"],
+        "num": 3,
+        "aliases": ["cjk-table", "telegram-table", "telegram-rich", "pipe-table", "3", "patch-3"],
         "name": "📑 Telegram CJK 原生 Markdown 表格放行",
         "method": "patch_telegram_cjk_rich",
         "description": "绕过桌面端 CJK 字符乱码检测，100% 允许 Telegram 客户端原生高保真表格渲染。",
     },
     {
         "id": "menu",
-        "aliases": ["telegram-menu", "menu-zh", "help-zh", "i18n", "localization"],
+        "num": 4,
+        "aliases": ["telegram-menu", "menu-zh", "help-zh", "i18n", "localization", "4", "patch-4"],
         "name": "🇨🇳 Telegram 快捷菜单与 /help /commands 全中文汉化",
         "method": "patch_telegram_menu_zh",
         "description": "全量汉化 Telegram Bot 指令菜单以及 /help、/commands 全部 99 个斜杠命令说明与用法提示。",
     },
     {
         "id": "db",
-        "aliases": ["state-db", "sqlite", "durability", "concurrency"],
+        "num": 5,
+        "aliases": ["state-db", "sqlite", "durability", "concurrency", "5", "patch-5"],
         "name": "🛡️ SQLite 生产级外键自愈与高并发防锁死",
         "method": "patch_state_db",
         "description": "设置连接级 busy_timeout=5000 缓解锁表，并自动补齐会话父记录根除外键崩溃。",
     },
     {
         "id": "tirith",
-        "aliases": ["approval", "security", "low-warn"],
+        "num": 6,
+        "aliases": ["approval", "security", "low-warn", "6", "patch-6"],
         "name": "⚡ Tirith 低风险扫描审批免打扰",
         "method": "patch_approval_tirith",
         "description": "自动放行 LOW/INFO 级别的低危静态扫描提示，高危风险正常拦截，提升自动化流畅度。",
     },
     {
         "id": "nostream",
-        "aliases": ["no-stream", "quiet-stream", "disable-streaming", "stream-shield"],
+        "num": 7,
+        "aliases": ["no-stream", "quiet-stream", "disable-streaming", "stream-shield", "7", "patch-7"],
         "name": "🚫 流式输出静默控制与 429 频控护盾",
         "method": "patch_streaming_control",
         "description": "支持全局 display.streaming: false 优雅静默，消除中间消息狂闪并彻底免除 429 封禁。",
     },
     {
         "id": "clean-think",
-        "aliases": ["think", "reasoning", "clean-reasoning", "suppress-thinking"],
+        "num": 8,
+        "aliases": ["think", "reasoning", "clean-reasoning", "suppress-thinking", "8", "patch-8"],
         "name": "🧠 全链路深度思考过程强力净化",
         "method": "patch_clean_thinking",
         "description": "全链路剥离 <think> 等变体思考标签与未闭合块，CLI 默认静音冗余思维链弹框。",
     },
     {
         "id": "smart-split",
-        "aliases": ["split", "telegram-split", "chunking", "message-chunker"],
+        "num": 9,
+        "aliases": ["split", "telegram-split", "chunking", "message-chunker", "9", "patch-9"],
         "name": "✂️ Telegram 4096 长消息智能段落切分",
         "method": "patch_smart_split",
         "description": "4096+ 字符长消息优先在自然段落 (\\n\\n) 边界切分，自动补齐代码围栏与表格结构。",
     },
     {
         "id": "terminal-cwd",
-        "aliases": ["cwd", "terminal", "deleted-workdir", "cwd-recovery"],
+        "num": 10,
+        "aliases": ["cwd", "terminal", "deleted-workdir", "cwd-recovery", "10", "patch-10"],
         "name": "📁 Terminal 失效工作目录自动回退",
         "method": "patch_terminal_cwd_recovery",
         "description": "显式 workdir 被删除后，在构建命令 wrapper 前回退到可用父目录，避免 exit 126。",
     },
     {
         "id": "state-guard",
-        "aliases": ["db-guard", "anti-delete", "state-db-guard", "guard"],
+        "num": 11,
+        "aliases": ["db-guard", "anti-delete", "state-db-guard", "guard", "11", "patch-11"],
         "name": "🧱 SQLite 主库防误删护栏 (State DB Anti-Destruction Guard)",
         "method": "patch_state_db_guard",
         "description": "对 live state.db 注入动作级防删护栏，精准拦截 rm/truncate/>/find-delete 误删，免除全量丢失风险。",
     },
 ]
+
+
+def expand_selection_tokens(tokens: Optional[Iterable[str]]) -> Optional[Set[str]]:
+    """
+    Expand patch selection tokens into matched lower-cased patch IDs/aliases.
+    Supports:
+      - Raw patch IDs: 'footer', 'table', etc.
+      - Aliases: 'cjk-table', 'token', etc.
+      - Numeric indices: '2', '3', '11'
+      - Numeric ranges: '2-5', '2~5'
+      - Comma/semicolon/space separated tokens: '2,3,7', '2-4,8'
+    """
+    if tokens is None:
+        return None
+
+    num_to_id = {item.get("num", i + 2): item["id"] for i, item in enumerate(PATCH_REGISTRY)}
+    alias_to_id: Dict[str, str] = {}
+    for item in PATCH_REGISTRY:
+        alias_to_id[item["id"].lower()] = item["id"].lower()
+        for a in item.get("aliases", []):
+            alias_to_id[a.lower()] = item["id"].lower()
+
+    resolved: Set[str] = set()
+
+    for raw in tokens:
+        parts = re.split(r"[,;\s]+", str(raw).strip())
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+
+            # Check range syntax: 2-5 or 2~5
+            m_range = re.match(r"^(\d+)[-~](\d+)$", part)
+            if m_range:
+                start, end = int(m_range.group(1)), int(m_range.group(2))
+                step = 1 if start <= end else -1
+                for n in range(start, end + step, step):
+                    if n in num_to_id:
+                        resolved.add(num_to_id[n].lower())
+                continue
+
+            # Check single number
+            if part.isdigit():
+                n = int(part)
+                if n in num_to_id:
+                    resolved.add(num_to_id[n].lower())
+                    continue
+
+            low = part.lower()
+            if low in alias_to_id:
+                resolved.add(alias_to_id[low])
+            else:
+                resolved.add(low)
+
+    return resolved
 
 
 STATUS_MAP = {
@@ -122,8 +188,8 @@ class PatchEngine:
         self.target_dir = target_dir
         self.dry_run = dry_run
         self.verbose = verbose
-        self.only_set: Optional[Set[str]] = {x.lower().strip() for x in only} if only else None
-        self.skip_set: Set[str] = {x.lower().strip() for x in skip} if skip else set()
+        self.only_set: Optional[Set[str]] = expand_selection_tokens(only)
+        self.skip_set: Set[str] = expand_selection_tokens(skip) or set()
         self.results: List[Tuple[str, str, str]] = []
 
     def log(self, patch_name: str, status: str, detail: str = ""):
@@ -1214,6 +1280,69 @@ def format_runtime_footer('''
             d_str = f" ({detail})" if detail else ""
             print(f"  {icon} {name:<42} -> {label}{d_str}")
 
+    def check_all_statuses(self) -> List[Dict[str, Any]]:
+        """
+        Runs a zero-side-effect probe across all registered patches to detect
+        their real presence in target_dir.
+        Returns a list of patch status dicts.
+        """
+        orig_dry_run = self.dry_run
+        orig_verbose = self.verbose
+        orig_results = list(self.results)
+        orig_only = self.only_set
+        orig_skip = self.skip_set
+
+        self.dry_run = True
+        self.verbose = False
+        self.only_set = None
+        self.skip_set = set()
+
+        statuses: List[Dict[str, Any]] = []
+        try:
+            for idx, item in enumerate(PATCH_REGISTRY):
+                self.results = []
+                method_name = item["method"]
+                method = getattr(self, method_name, None)
+                sub_res: List[Tuple[str, str, str]] = []
+                if callable(method):
+                    try:
+                        method()
+                        sub_res = list(self.results)
+                    except Exception as e:
+                        sub_res = [(item["name"], "error", str(e))]
+
+                if any(r[1] in ("dry-run", "failed") for r in sub_res):
+                    st = "pending"
+                    applied = False
+                elif all(r[1] == "skipped" for r in sub_res) and sub_res:
+                    st = "missing"
+                    applied = False
+                elif any(r[1] == "unchanged" for r in sub_res):
+                    st = "applied"
+                    applied = True
+                else:
+                    st = "pending"
+                    applied = False
+
+                statuses.append({
+                    "id": item["id"],
+                    "num": item.get("num", idx + 2),
+                    "name": item["name"],
+                    "description": item["description"],
+                    "status": st,
+                    "applied": applied,
+                    "sub_results": [{"target": r[0], "status": r[1], "detail": r[2]} for r in sub_res],
+                })
+        finally:
+            self.dry_run = orig_dry_run
+            self.verbose = orig_verbose
+            self.results = orig_results
+            self.only_set = orig_only
+            self.skip_set = orig_skip
+
+        return statuses
+
+
 
 def purge_bytecode_cache(target_dir: Path):
     """Purge stale .pyc and __pycache__ in target directory."""
@@ -1530,23 +1659,111 @@ def restart_gateway_services(target_dir: Optional[Path] = None) -> bool:
     return True
 
 
+def run_interactive_cli(target: Path):
+    """Interactive console menu for selecting and installing patches."""
+    engine = PatchEngine(target_dir=target, dry_run=True, verbose=False)
+    statuses = engine.check_all_statuses()
+    applied_cnt = sum(1 for s in statuses if s["applied"])
+    total_cnt = len(statuses)
+    status_map = {s["num"]: s for s in statuses}
+
+    C_BOLD = "\033[1m"
+    C_BLUE = "\033[34m"
+    C_GREEN = "\033[32m"
+    C_YELLOW = "\033[33m"
+    C_CYAN = "\033[36m"
+    C_RESET = "\033[0m"
+
+    print(f"{C_BOLD}{C_CYAN}====================================================={C_RESET}")
+    print(f"{C_BOLD}{C_BLUE}   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.6.0)   {C_RESET}")
+    print(f"{C_BOLD}{C_CYAN}====================================================={C_RESET}")
+    print(f" 目标路径: {C_GREEN}{target}{C_RESET}  {C_BOLD}(补丁状态: {C_GREEN}{applied_cnt}{C_RESET}/{total_cnt} 已应用){C_RESET}\n")
+    print(f" {C_BOLD}{C_GREEN}[1]  🚀 全量一键安装、自动配置并平滑重启 (推荐 / 直接回车){C_RESET}")
+    print(" ---------------------------------------------------")
+    for s in statuses:
+        tag = f"{C_GREEN}[已应用 ✓]{C_RESET}" if s["applied"] else f"{C_YELLOW}[未应用 -]{C_RESET}"
+        print(f" [{s['num']:>2}]  {tag}  {s['name']}")
+    print(" ---------------------------------------------------")
+    print(" [12] 🔍 预览变更 (Dry Run，不写入磁盘)")
+    print(" [0]  🚪 退出脚本")
+    print(f"{C_BOLD}{C_CYAN}====================================================={C_RESET}")
+
+    try:
+        choice = input("\n请输入选项编号 (直接多选如 2 3 7、2,3,7 或 2-5) [默认: 1]: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\n已退出。")
+        return
+
+    if not choice:
+        choice = "1"
+
+    if choice == "0":
+        print("已退出操作。")
+        return
+
+    if choice == "1":
+        print("\n🚀 正在全量应用所有增强补丁、自动配置并平滑重启...")
+        exec_engine = PatchEngine(target_dir=target, dry_run=False, verbose=True)
+        exec_engine.run_all()
+        ensure_runtime_config(dry_run=False)
+        restart_gateway_services(target_dir=target)
+        return
+
+    if choice == "12":
+        print("\n🔍 正在执行 Dry-Run 预检分析...")
+        exec_engine = PatchEngine(target_dir=target, dry_run=True, verbose=True)
+        exec_engine.run_all()
+        return
+
+    resolved_ids = expand_selection_tokens([choice])
+    if not resolved_ids:
+        print("\n❌ 未识别到有效的补丁编号，已退出。")
+        return
+
+    selected_meta = [p for p in PATCH_REGISTRY if p["id"] in resolved_ids]
+    if not selected_meta:
+        print("\n❌ 未找到匹配的补丁模块，已退出。")
+        return
+
+    print(f"\n{C_BOLD}{C_CYAN}-----------------------------------------------------{C_RESET}")
+    print(f"{C_BOLD}{C_BLUE}🎯 直接选中以下 {len(selected_meta)} 项补丁开始安装：{C_RESET}")
+    for p in selected_meta:
+        p_st = status_map.get(p["num"], {})
+        tag = f"{C_GREEN}[已应用 ✓]{C_RESET}" if p_st.get("applied") else f"{C_YELLOW}[未应用 -]{C_RESET}"
+        print(f"  • [{p['num']:>2}]  {tag}  {p['name']}")
+    print(f"{C_BOLD}{C_CYAN}-----------------------------------------------------{C_RESET}\n")
+
+    print("🚀 正在应用选定补丁...")
+    exec_engine = PatchEngine(target_dir=target, dry_run=False, verbose=True, only=list(resolved_ids))
+    exec_engine.run_all()
+    ensure_runtime_config(dry_run=False)
+    restart_gateway_services(target_dir=target)
+    print(f"\n{C_BOLD}{C_GREEN}🎉 选定补丁已全部处理完毕并生效！{C_RESET}\n")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Hermes Agent 生产级体验增强补丁与扩展注入工具。",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 常用示例:
+  # 终端调出交互式多选安装控制台 (实时展示各补丁应用状态)
+  hermes-patches
+
   # 全量应用所有增强补丁、自动配置并平滑重启
   python3 hermes_patches.py --auto-config --restart
+
+  # 查看所有补丁的实际应用状态
+  python3 hermes_patches.py --status
 
   # 预览变更而不写入磁盘 (Dry Run)
   python3 hermes_patches.py --dry-run -v
 
-  # 仅应用特定补丁 (如流式静默与思考净化)
-  python3 hermes_patches.py --only nostream clean-think
+  # 仅应用特定补丁 (支持补丁名或编号/范围，如 2 3 7 或 2-5)
+  python3 hermes_patches.py --only 2 3 7 clean-think
 
-  # 应用除菜单汉化外的所有补丁
-  python3 hermes_patches.py --skip menu
+  # 跳过特定补丁模块
+  python3 hermes_patches.py --skip menu tirith
         """,
     )
     parser.add_argument(
@@ -1557,6 +1774,9 @@ def main():
         help="显示当前版本号并退出",
     )
     parser.add_argument("--target", type=str, default="", help="指定 Hermes Agent 源码安装目录")
+    parser.add_argument("--status", action="store_true", help="检测并输出目标目录中所有补丁模块的实际应用状态")
+    parser.add_argument("--json", action="store_true", help="以 JSON 格式输出状态检测结果")
+    parser.add_argument("--interactive", "-i", action="store_true", help="进入交互式控制台菜单模式")
     parser.add_argument("--dry-run", action="store_true", help="预检模式：仅检查变更，不修改磁盘文件")
     parser.add_argument("--verbose", "-v", action="store_true", help="输出详细执行日志")
     parser.add_argument("--auto-config", action="store_true", help="自动校验并开启 ~/.hermes/config.yaml 中的页脚与计量显示")
@@ -1566,7 +1786,7 @@ def main():
         "--only",
         nargs="+",
         metavar="PATCH",
-        help="仅应用指定的补丁模块 (如 footer, table, menu, db, tirith, nostream, clean-think, smart-split, terminal-cwd)",
+        help="仅应用指定的补丁模块 (支持补丁ID、别名、数字编号如 2 3 7 或范围如 2-5)",
     )
     parser.add_argument(
         "--skip",
@@ -1582,7 +1802,7 @@ def main():
         print("🛠️ 可用的 hermes-patches 模块清单:\n")
         for p in PATCH_REGISTRY:
             aliases = ", ".join(p["aliases"])
-            print(f"  • 模块 ID : {p['id']:<12} (别名: {aliases})")
+            print(f"  • 模块 ID : {p['id']:<12} [编号: {p['num']}] (别名: {aliases})")
             print(f"    模块名称: {p['name']}")
             print(f"    功能说明: {p['description']}\n")
         sys.exit(0)
@@ -1592,6 +1812,43 @@ def main():
         print(f"❌ 错误: 目标目录 '{target}' 未检测到有效的 Hermes Agent 安装。", file=sys.stderr)
         print("请通过 --target /path/to/hermes-agent 或环境变量 HERMES_SOURCE_DIR 指定路径。", file=sys.stderr)
         sys.exit(1)
+
+    # Status probing
+    if args.status:
+        engine = PatchEngine(target_dir=target, dry_run=True, verbose=False)
+        statuses = engine.check_all_statuses()
+        applied_cnt = sum(1 for s in statuses if s["applied"])
+        total_cnt = len(statuses)
+
+        if args.json:
+            data = {
+                "target": str(target),
+                "total": total_cnt,
+                "applied": applied_cnt,
+                "all_applied": applied_cnt == total_cnt,
+                "patches": {s["id"]: s for s in statuses},
+                "list": statuses,
+            }
+            print(json.dumps(data, ensure_ascii=False, indent=2))
+            sys.exit(0)
+
+        print(f"\n🔍 Hermes Agent 补丁应用状态检测:")
+        print(f"   目标路径: {target}")
+        print(f"   当前状态: 已应用 {applied_cnt}/{total_cnt} 项补丁\n")
+        print("  " + "-" * 70)
+        for s in statuses:
+            badge = "🟢 [已应用 ✓]" if s["applied"] else "🟡 [未应用 -]"
+            print(f"   [{s['num']:>2}]  {badge}  {s['name']}")
+        print("  " + "-" * 70 + "\n")
+        sys.exit(0)
+
+    has_action_flags = any([
+        args.all, args.dry_run, args.auto_config, args.restart,
+        args.only is not None, args.skip is not None, args.verbose
+    ])
+    if args.interactive or (not has_action_flags and sys.stdin.isatty()):
+        run_interactive_cli(target)
+        return
 
     engine = PatchEngine(
         target_dir=target,

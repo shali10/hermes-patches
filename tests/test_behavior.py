@@ -229,7 +229,28 @@ def main():
     is_blocked, desc = detect_hardline_command("rm /root/.hermes/backups/state.db.bak")
     assert not is_blocked, f"rm state.db.bak should NOT be hardline-blocked, got {desc}"
 
-    print("\n✅ All 10 patches successfully passed runtime behavioral assertions!")
+    # -------------------------------------------------------------
+    # 11. Multi-selection Token Expansion & Status Probing (v1.6.0)
+    # -------------------------------------------------------------
+    print("Testing 11/11: Multi-selection Expansion & Status Probing (v1.6.0)...")
+    repo_root = Path(__file__).resolve().parent.parent
+    sys.path.insert(0, str(repo_root))
+    import hermes_patches
+
+    # Test token expansion
+    assert hermes_patches.expand_selection_tokens(["2", "3"]) == {"footer", "table"}
+    assert hermes_patches.expand_selection_tokens(["2,3,7"]) == {"footer", "table", "nostream"}
+    assert hermes_patches.expand_selection_tokens(["2-5"]) == {"footer", "table", "menu", "db"}
+    assert hermes_patches.expand_selection_tokens(["2~4, 11"]) == {"footer", "table", "menu", "state-guard"}
+
+    # Test check_all_statuses against target_dir
+    engine = hermes_patches.PatchEngine(target_dir=target_dir, dry_run=True, verbose=False)
+    statuses = engine.check_all_statuses()
+    assert len(statuses) == 10, f"Expected 10 patches, got {len(statuses)}"
+    assert all(s["applied"] for s in statuses), "Target directory should have all 10 patches applied"
+
+    print("\n✅ All patches and v1.6.0 features successfully passed behavioral assertions!")
+
 
 
 if __name__ == "__main__":

@@ -174,26 +174,37 @@ curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install
 
 ---
 
-### Option C: Interactive Menu
+### Option C: Interactive Menu (Multi-Select & Live Status Probing)
 
 ```bash
 git clone https://github.com/shali10/hermes-patches.git
 cd hermes-patches
 bash install.sh
+# Or directly run via Python package:
+hermes-patches
 ```
+> 💡 **Highlights**:
+> - **Live Status Probing**: Instantly shows `[APPLIED ✓]` or `[PENDING -]` for each patch item in the console;
+> - **Direct In-Place Multi-Selection**: No secondary submenus! Directly enter multiple indices (e.g. `2 3 7` or `2,3,7`) or ranges (`2-5`) in the main prompt to install immediately with auto-restart.
 
 ---
 
 ### Option D: Advanced CLI Flags
 
 ```bash
-# 1. Preview changes (Dry Run)
+# 1. Probe live patch status across target directory
+hermes-patches --status
+# (Or output structured JSON)
+hermes-patches --status --json
+
+# 2. Preview changes (Dry Run)
 hermes-patches --dry-run -v
 
-# 2. Select specific patches with auto-config and auto-restart
-hermes-patches --only nostream clean-think table --auto-config --restart
+# 3. Select specific patches by ID, numeric index, or range
+hermes-patches --only 2 3 7 --auto-config --restart
+hermes-patches --only 2-5 nostream --auto-config --restart
 
-# 3. Apply all except menu localization
+# 4. Apply all except menu localization
 hermes-patches --skip menu --auto-config --restart
 ```
 
@@ -240,6 +251,7 @@ docker restart <container_name>
 
 | Version | Date | Highlights | Details |
 |:---:|:---:|---|:---:|
+| **`v1.6.0`** | 2026-09-08 | **🎛️ Community Feedback: Interactive multi-select installation (indices/ranges) + Live patch status probing (`--status`)** | [View 📄](CHANGELOG.md#v160---2026-09-08) |
 | **`v1.5.0`** | 2026-09-07 | **🧱 SQLite state.db action-anchored anti-destruction floor (`state-guard`) + Neo-Brutalist showcase banner** | [View 📄](CHANGELOG.md#v150---2026-09-07) |
 | **`v1.4.0`** | 2026-09-02 | **⚡ Multi-vendor cache parsing + adaptive prefix derivation + terminal-cwd patch + PyPI packaging** | [View 📄](CHANGELOG.md#v140---2026-09-02) |
 | **`v1.3.8`** | 2026-08-29 | **🎯 Dual-path token resolution + true Prompt Total (Input+Cache) & KV cache hit rate alignment** | [View 📄](CHANGELOG.md#v137---2026-08-29) |

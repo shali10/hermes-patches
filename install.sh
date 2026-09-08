@@ -252,7 +252,7 @@ detect_and_report_daemon() {
 # If CLI arguments are provided, bypass interactive menu and execute directly
 if [ "$#" -gt 0 ]; then
     for arg in "$@"; do
-        if [ "$arg" == "--list-patches" ] || [ "$arg" == "-h" ] || [ "$arg" == "--help" ]; then
+        if [ "$arg" == "--list-patches" ] || [ "$arg" == "-h" ] || [ "$arg" == "--help" ] || [ "$arg" == "--status" ] || [ "$arg" == "-V" ] || [ "$arg" == "--version" ]; then
             "$PYTHON_BIN" "$PATCH_SCRIPT" "$@"
             exit 0
         fi
@@ -283,51 +283,65 @@ if [ "$#" -gt 0 ]; then
 fi
 
 # =====================================================
-# Interactive Numbered Menu (交互式中文数字菜单)
+# Status Detection & Interactive Menu (交互式多选菜单与状态透视)
 # =====================================================
-show_menu() {
-    clear 2>/dev/null || true
-    echo -e "${BOLD}${CYAN}=====================================================${NC}"
-    echo -e "${BOLD}${BLUE}   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.5.0)   ${NC}"
-    echo -e "${BOLD}${CYAN}=====================================================${NC}"
-    echo -e " 目标路径: ${GREEN}${HERMES_DIR}${NC}\n"
-    echo -e " ${BOLD}${GREEN}[1] 🚀 全量一键安装、自动配置并平滑重启 (推荐 / 直接回车)${NC}"
-    echo -e " ---------------------------------------------------"
-    echo -e " [2] 📊 Runtime Footer (Token 全量计量、缓存与耗时)"
-    echo -e " [3] 📑 Telegram CJK 原生 Markdown 表格放行"
-    echo -e " [4] 🇨🇳 Telegram 快捷菜单与 /help /commands 全中文汉化"
-    echo -e " [5] 🛡️ SQLite 生产级外键自愈与高并发防锁死"
-    echo -e " [6] ⚡ Tirith 低风险扫描审批免打扰"
-    echo -e " [7] 🚫 流式输出静默控制与 429 频控防护"
-    echo -e " [8] 🧠 全链路深度思考过程强力净化"
-    echo -e " [9] ✂️ Telegram 4096 长消息智能段落切分"
-    echo -e " [10] 📁 Terminal 失效工作目录自动回退"
-    echo -e " [11] 🧱 SQLite 主库防误删护栏"
-    echo -e " ---------------------------------------------------"
-    echo -e " [12] 🔍 预览变更 (Dry Run，不写入磁盘)"
-    echo -e " [13] ↩️ 卸载补丁并无损还原 (.bak 原生回滚)"
-    echo -e " [14] 🧪 运行运行时行为断言测试套件 (Behavior Test)"
-    echo -e " [0]  🚪 退出脚本"
-    echo -e "${BOLD}${CYAN}=====================================================${NC}"
+
+APPLIED_COUNT=0
+TOTAL_COUNT=10
+declare -A PATCH_ST=()
+
+detect_patches_status() {
+    local json_data
+    json_data=$("$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --status --json 2>/dev/null || echo "")
+    if [ -n "$json_data" ]; then
+        eval "$("$PYTHON_BIN" -c '
+import json, sys
+try:
+    d = json.loads(sys.argv[1])
+    applied_cnt = d.get("applied", 0)
+    total_cnt = d.get("total", 10)
+    print(f"APPLIED_COUNT={applied_cnt}")
+    print(f"TOTAL_COUNT={total_cnt}")
+    for p in d.get("list", []):
+        st = "applied" if p.get("applied") else "pending"
+        num = p.get("num")
+        pid = p.get("id")
+        print(f"PATCH_ST[{num}]=\"{st}\"")
+        print(f"PATCH_ST[\"{pid}\"]=\"{st}\"")
+except Exception:
+    pass
+' "$json_data" 2>/dev/null || true)"
+    fi
 }
 
-show_menu
+get_status_badge() {
+    local num="$1"
+    local st="${PATCH_ST[$num]:-unknown}"
+    if [ "$st" = "applied" ]; then
+        echo -e "${GREEN}[已应用 ✓]${NC}"
+    elif [ "$st" = "pending" ]; then
+        echo -e "${YELLOW}[未应用 -]${NC}"
+    else
+        echo -e "${CYAN}[待检测]${NC}"
+    fi
+}
 
-# Read user input safely from TTY
-CHOICE=""
-if [ -t 0 ]; then
-    read -r -p "请输入选项数字编号 [默认: 1]: " CHOICE || CHOICE="1"
-elif (exec < /dev/tty) 2>/dev/null; then
-    read -r -p "请输入选项数字编号 [默认: 1]: " CHOICE < /dev/tty || CHOICE="1"
-else
-    CHOICE="1"
-    echo -e "非交互式终端环境，默认执行: [1] 全量一键安装、自动配置并平滑重启"
-fi
+get_patch_name_by_num() {
+    case "$1" in
+        2) echo "📊 Runtime Footer (Token 全量计量、缓存与耗时)" ;;
+        3) echo "📑 Telegram CJK 原生 Markdown 表格放行" ;;
+        4) echo "🇨🇳 Telegram 快捷菜单与 /help /commands 全中文汉化" ;;
+        5) echo "🛡️ SQLite 生产级外键自愈与高并发防锁死" ;;
+        6) echo "⚡ Tirith 低风险扫描审批免打扰" ;;
+        7) echo "🚫 流式输出静默控制与 429 频控防护" ;;
+        8) echo "🧠 全链路深度思考过程强力净化" ;;
+        9) echo "✂️ Telegram 4096 长消息智能段落切分" ;;
+        10) echo "📁 Terminal 失效工作目录自动回退" ;;
+        11) echo "🧱 SQLite 主库防误删护栏" ;;
+        *) echo "" ;;
+    esac
+}
 
-CHOICE="${CHOICE:-1}"
-echo ""
-
-# Number to Patch ID mapping
 map_num_to_patch() {
     case "$1" in
         2) echo "footer" ;;
@@ -343,6 +357,88 @@ map_num_to_patch() {
         *) echo "" ;;
     esac
 }
+
+parse_selection_tokens() {
+    local input="$1"
+    local normalized
+    normalized=$(echo "$input" | tr ',;+' ' ')
+    local -a result_nums=()
+
+    for token in $normalized; do
+        if [[ "$token" =~ ^([0-9]+)[-~]([0-9]+)$ ]]; then
+            local s="${BASH_REMATCH[1]}"
+            local e="${BASH_REMATCH[2]}"
+            if [ "$s" -le "$e" ]; then
+                for ((i=s; i<=e; i++)); do
+                    if [ "$i" -ge 2 ] && [ "$i" -le 11 ]; then
+                        result_nums+=("$i")
+                    fi
+                done
+            else
+                for ((i=s; i>=e; i--)); do
+                    if [ "$i" -ge 2 ] && [ "$i" -le 11 ]; then
+                        result_nums+=("$i")
+                    fi
+                done
+            fi
+        elif [[ "$token" =~ ^[0-9]+$ ]]; then
+            if [ "$token" -ge 2 ] && [ "$token" -le 11 ]; then
+                result_nums+=("$token")
+            fi
+        fi
+    done
+
+    if [ "${#result_nums[@]}" -gt 0 ]; then
+        printf '%s\n' "${result_nums[@]}" | sort -nu
+    fi
+}
+
+show_menu() {
+    clear 2>/dev/null || true
+    echo -e "${BOLD}${CYAN}=====================================================${NC}"
+    echo -e "${BOLD}${BLUE}   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.6.0)   ${NC}"
+    echo -e "${BOLD}${CYAN}=====================================================${NC}"
+    if [ "$APPLIED_COUNT" -gt 0 ] 2>/dev/null; then
+        echo -e " 目标路径: ${GREEN}${HERMES_DIR}${NC}  ${BOLD}(补丁状态: ${GREEN}${APPLIED_COUNT}${NC}/${TOTAL_COUNT} 已应用)${NC}\n"
+    else
+        echo -e " 目标路径: ${GREEN}${HERMES_DIR}${NC}\n"
+    fi
+    echo -e " ${BOLD}${GREEN}[1]  🚀 全量一键安装、自动配置并平滑重启 (推荐 / 直接回车)${NC}"
+    echo -e " ---------------------------------------------------"
+    echo -e " [2]  $(get_status_badge 2)  📊 Runtime Footer (Token 全量计量、缓存与耗时)"
+    echo -e " [3]  $(get_status_badge 3)  📑 Telegram CJK 原生 Markdown 表格放行"
+    echo -e " [4]  $(get_status_badge 4)  🇨🇳 Telegram 快捷菜单与 /help /commands 全中文汉化"
+    echo -e " [5]  $(get_status_badge 5)  🛡️ SQLite 生产级外键自愈与高并发防锁死"
+    echo -e " [6]  $(get_status_badge 6)  ⚡ Tirith 低风险扫描审批免打扰"
+    echo -e " [7]  $(get_status_badge 7)  🚫 流式输出静默控制与 429 频控防护"
+    echo -e " [8]  $(get_status_badge 8)  🧠 全链路深度思考过程强力净化"
+    echo -e " [9]  $(get_status_badge 9)  ✂️ Telegram 4096 长消息智能段落切分"
+    echo -e " [10] $(get_status_badge 10) 📁 Terminal 失效工作目录自动回退"
+    echo -e " [11] $(get_status_badge 11) 🧱 SQLite 主库防误删护栏"
+    echo -e " ---------------------------------------------------"
+    echo -e " [12] 🔍 预览变更 (Dry Run，不写入磁盘)"
+    echo -e " [13] ↩️ 卸载补丁并无损还原 (.bak 原生回滚)"
+    echo -e " [14] 🧪 运行运行时行为断言测试套件 (Behavior Test)"
+    echo -e " [0]  🚪 退出脚本"
+    echo -e "${BOLD}${CYAN}=====================================================${NC}"
+}
+
+detect_patches_status
+show_menu
+
+# Read user input safely from TTY
+CHOICE=""
+if [ -t 0 ]; then
+    read -r -p "请输入选项编号 (直接多选如 2 3 7、2,3,7 或 2-5) [默认: 1]: " CHOICE || CHOICE="1"
+elif (exec < /dev/tty) 2>/dev/null; then
+    read -r -p "请输入选项编号 (单选/多选如 2 3 7 或 2-5/按0退出) [默认: 1]: " CHOICE < /dev/tty || CHOICE="1"
+else
+    CHOICE="1"
+    echo -e "非交互式终端环境，默认执行: [1] 全量一键安装、自动配置并平滑重启"
+fi
+
+CHOICE="${CHOICE:-1}"
+echo ""
 
 case "$CHOICE" in
     1)
@@ -363,30 +459,33 @@ case "$CHOICE" in
         "$PYTHON_BIN" "$SCRIPT_DIR/tests/test_behavior.py" --target "$HERMES_DIR"
         exit 0
         ;;
-    0)
+    0|q|Q|exit)
         echo -e "${YELLOW}已退出操作。${NC}"
         exit 0
         ;;
     *)
-        # Support single or multiple space/comma-separated numbers (e.g. "2 3 7" or "2,3,7")
+        mapfile -t PARSED_NUMS < <(parse_selection_tokens "$CHOICE")
+        if [ "${#PARSED_NUMS[@]}" -eq 0 ]; then
+            echo -e "${RED}输入无效或未匹配到任何可用补丁编号。已退出。${NC}\n"
+            exit 1
+        fi
+
         SELECTED_PATCHES=()
-        CLEANED_INPUT=$(echo "$CHOICE" | tr ',' ' ')
-        for item in $CLEANED_INPUT; do
-            p_id=$(map_num_to_patch "$item")
+        echo -e "${BOLD}${CYAN}-----------------------------------------------------${NC}"
+        echo -e "${BOLD}${BLUE}🎯 直接选中以下 ${#PARSED_NUMS[@]} 项补丁开始安装：${NC}"
+        for num in "${PARSED_NUMS[@]}"; do
+            p_id=$(map_num_to_patch "$num")
             if [ -n "$p_id" ]; then
                 SELECTED_PATCHES+=("$p_id")
+                p_name=$(get_patch_name_by_num "$num")
+                s_badge=$(get_status_badge "$num")
+                echo -e "  • [${num}]  ${s_badge}  ${p_name}"
             fi
         done
+        echo -e "${BOLD}${CYAN}-----------------------------------------------------${NC}\n"
 
-        if [ "${#SELECTED_PATCHES[@]}" -gt 0 ]; then
-            echo -e "${BLUE}正在应用选定补丁: ${BOLD}${SELECTED_PATCHES[*]}${NC}\n"
-            setup_systemd_hook
-            "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --only "${SELECTED_PATCHES[@]}" --auto-config --restart --verbose
-        else
-            echo -e "${RED}输入无效，默认全量应用所有补丁...${NC}\n"
-            setup_systemd_hook
-            "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --auto-config --restart --verbose
-        fi
+        setup_systemd_hook
+        "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --only "${SELECTED_PATCHES[@]}" --auto-config --restart --verbose
         ;;
 esac
 
