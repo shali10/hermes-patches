@@ -1049,25 +1049,16 @@ def format_runtime_footer('''
                 if "_global_display_streaming" in cand:
                     return cand
 
-                old_runner_gate = '''        # display.platforms.<plat>.streaming may disable streaming per platform; None = follow global.
-        plat_streaming = ctx.resolve_display_setting(ctx.user_config, platform_key, "streaming")
-        want_stream_deltas = (
-            scfg.enabled and scfg.transport != "off" if plat_streaming is None else bool(plat_streaming)
-        )'''
-                new_runner_gate = '''        # display.platforms.<plat>.streaming may disable streaming per platform; None = follow global.
-        plat_streaming = ctx.resolve_display_setting(ctx.user_config, platform_key, "streaming")
+                anchor = '        plat_streaming = ctx.resolve_display_setting(ctx.user_config, platform_key, "streaming")'
+                inject = '''        plat_streaming = ctx.resolve_display_setting(ctx.user_config, platform_key, "streaming")
         # Check global display.streaming setting (hermes-patches stream-shield)
         _global_display_streaming = None
         if isinstance(ctx.user_config, dict):
             _global_display_streaming = (ctx.user_config.get("display") or {}).get("streaming")
         if plat_streaming is None and _global_display_streaming is not None:
-            plat_streaming = bool(_global_display_streaming)
-
-        want_stream_deltas = (
-            scfg.enabled and scfg.transport != "off" if plat_streaming is None else bool(plat_streaming)
-        )'''
-                if old_runner_gate in cand:
-                    cand = cand.replace(old_runner_gate, new_runner_gate, 1)
+            plat_streaming = bool(_global_display_streaming)'''
+                if anchor in cand:
+                    cand = cand.replace(anchor, inject, 1)
                 return cand
             ok1 = self.apply_file_patch("gateway/run_turn_runner.py", transform_runner, "🚫 流式控制与 429 护盾 (Runner)")
             return ok1
