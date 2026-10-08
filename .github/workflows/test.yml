@@ -25,7 +25,7 @@ jobs:
 
       - name: Install Hermes Agent Dependencies
         run: |
-          pip install ruamel.yaml pyyaml httpx python-telegram-bot pydantic
+          pip install ruamel.yaml requests pyyaml httpx python-telegram-bot pydantic
           [ -f /tmp/hermes-agent/requirements.txt ] && pip install -r /tmp/hermes-agent/requirements.txt || true
 
       - name: Test List Patches & Dry Run
