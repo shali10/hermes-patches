@@ -1089,6 +1089,16 @@ def format_runtime_footer('''
                 cand,
                 count=1,
             )
+            if "_OPEN_TAGS = THINK_OPEN_TAGS" in cand:
+                cand = cand.replace(
+                    "_OPEN_TAGS = THINK_OPEN_TAGS",
+                    '_OPEN_TAGS = tuple(dict.fromkeys(THINK_OPEN_TAGS + ("<antml:thought>", "<reflection>", "<inner_monologue>")))'
+                )
+            if "_CLOSE_TAGS = THINK_CLOSE_TAGS" in cand:
+                cand = cand.replace(
+                    "_CLOSE_TAGS = THINK_CLOSE_TAGS",
+                    '_CLOSE_TAGS = tuple(dict.fromkeys(THINK_CLOSE_TAGS + ("</antml:thought>", "</reflection>", "</inner_monologue>")))'
+                )
             return cand
 
         def transform_stream_consumer(src: str) -> str:
@@ -1114,6 +1124,17 @@ def format_runtime_footer('''
     )'''
             if old_tags in cand:
                 cand = cand.replace(old_tags, new_tags, 1)
+
+            if "_OPEN_THINK_TAGS = THINK_OPEN_TAGS" in cand:
+                cand = cand.replace(
+                    "_OPEN_THINK_TAGS = THINK_OPEN_TAGS",
+                    '_OPEN_THINK_TAGS = tuple(dict.fromkeys(THINK_OPEN_TAGS + ("<antml:thought>", "<reflection>", "<inner_monologue>")))'
+                )
+            if "_CLOSE_THINK_TAGS = THINK_CLOSE_TAGS" in cand:
+                cand = cand.replace(
+                    "_CLOSE_THINK_TAGS = THINK_CLOSE_TAGS",
+                    '_CLOSE_THINK_TAGS = tuple(dict.fromkeys(THINK_CLOSE_TAGS + ("</antml:thought>", "</reflection>", "</inner_monologue>")))'
+                )
             return cand
 
         ok1 = self.apply_file_patch("cli.py", transform_cli, "🧠 CLI 终端思考过程静音")
@@ -1125,6 +1146,18 @@ def format_runtime_footer('''
 
         if (self.target_dir / "gateway/stream_consumer_think.py").is_file():
             self.apply_file_patch("gateway/stream_consumer_think.py", transform_stream_consumer, "🧠 Gateway Stream Think 思考标签净化")
+
+        if (self.target_dir / "agent/think_scrubber.py").is_file():
+            def transform_scrubber(src: str) -> str:
+                cand = src
+                if "antml:thought" in cand:
+                    return cand
+                old_ttn = '    "思考", "反思", "推理", "推敲",'
+                new_ttn = '    "思考", "反思", "推理", "推敲",\n    "antml:thought", "reflection", "inner_monologue",'
+                if old_ttn in cand:
+                    cand = cand.replace(old_ttn, new_ttn, 1)
+                return cand
+            self.apply_file_patch("agent/think_scrubber.py", transform_scrubber, "🧠 Agent 思考标签字典扩展")
 
         return ok1 and ok2
 
