@@ -778,21 +778,27 @@ def format_runtime_footer('''
             cand = re.sub(old_bd_body_pat, new_bd_body, cand, count=1)
 
             # 2. Update gateway_help_lines to translate descriptions & alias note
-            old_ghl = '        lines.append(f"`/{cmd.name}{args}` -- {cmd.description}{alias_note}")'
-            new_ghl = '''        alias_note_zh = alias_note.replace("alias:", "别名:") if alias_note else ""
-        desc = _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, cmd.description)
+            for old_ghl in [
+                '        lines.append(f"`/{cmd.name}{args}` -- {cmd.describe()}{alias_note}")',
+                '        lines.append(f"`/{cmd.name}{args}` -- {cmd.description}{alias_note}")',
+            ]:
+                if old_ghl in cand:
+                    new_ghl = '''        alias_note_zh = alias_note.replace("alias:", "别名:") if alias_note else ""
+        desc_val = cmd.describe() if hasattr(cmd, "describe") else cmd.description
+        desc = _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, desc_val)
         lines.append(f"`/{cmd.name}{args}` -- {desc}{alias_note_zh}")'''
-            if old_ghl in cand:
-                cand = cand.replace(old_ghl, new_ghl, 1)
+                    cand = cand.replace(old_ghl, new_ghl, 1)
 
             # 3. Localize telegram_bot_commands while preserving the current
-            # registry-derived implementation. Never replace the function with
-            # a stale snapshot such as _RAW_TELEGRAM_BOT_COMMANDS (removed
-            # upstream), which breaks command-menu registration at runtime.
-            old_tg_append = '            result.append((tg_name, cmd.description))'
-            new_tg_append = '            result.append((tg_name, _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, cmd.description)))'
-            if old_tg_append in cand:
-                cand = cand.replace(old_tg_append, new_tg_append, 1)
+            # registry-derived implementation.
+            for old_tg_append in [
+                '            result.append((tg_name, cmd.describe()))',
+                '            result.append((tg_name, cmd.description))',
+            ]:
+                if old_tg_append in cand:
+                    new_tg_append = '''            desc_val = cmd.describe() if hasattr(cmd, "describe") else cmd.description
+            result.append((tg_name, _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, desc_val)))'''
+                    cand = cand.replace(old_tg_append, new_tg_append, 1)
 
             old_command_append = '            result.append((tg_name, command.description))'
             new_command_append = '''            result.append(
