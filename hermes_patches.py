@@ -824,20 +824,28 @@ def format_runtime_footer('''
                     else:
                         cand = cand + "\n\n\n" + zh_dict_block
 
-                old_pairs = "pairs = [(cmd.name, cmd.description) for cmd in _gateway_available_commands()]"
-                new_pairs = "pairs = [(cmd.name, _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, cmd.description)) for cmd in _gateway_available_commands()]"
-                if old_pairs in cand:
-                    cand = cand.replace(old_pairs, new_pairs, 1)
+                for old_p, new_p in [
+                    ("pairs = [(cmd.name, cmd.describe()) for cmd in _gateway_available_commands()]",
+                     "pairs = [(cmd.name, _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, cmd.describe())) for cmd in _gateway_available_commands()]"),
+                    ("pairs = [(cmd.name, cmd.description) for cmd in _gateway_available_commands()]",
+                     "pairs = [(cmd.name, _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, cmd.description)) for cmd in _gateway_available_commands()]"),
+                ]:
+                    if old_p in cand:
+                        cand = cand.replace(old_p, new_p, 1)
 
                 old_plugin_pairs = "pairs += [(n, d) for n, d, hint in _iter_plugin_command_entries()"
                 new_plugin_pairs = "pairs += [(n, _TELEGRAM_ZH_DESCRIPTIONS.get(n, d)) for n, d, hint in _iter_plugin_command_entries()"
                 if old_plugin_pairs in cand:
                     cand = cand.replace(old_plugin_pairs, new_plugin_pairs, 1)
 
-                old_ret = "return [(tg, desc) for name, desc in pairs if (tg := _sanitize_telegram_name(name))]"
-                new_ret = "return [(tg, _TELEGRAM_ZH_DESCRIPTIONS.get(name, desc)) for name, desc in pairs if (tg := _sanitize_telegram_name(name))]"
-                if old_ret in cand:
-                    cand = cand.replace(old_ret, new_ret, 1)
+                for old_ret, new_ret in [
+                    ("return [(tg, _normalize_telegram_desc(desc)) for name, desc in pairs if (tg := _sanitize_telegram_name(name))]",
+                     "return [(tg, _normalize_telegram_desc(_TELEGRAM_ZH_DESCRIPTIONS.get(name, desc))) for name, desc in pairs if (tg := _sanitize_telegram_name(name))]"),
+                    ("return [(tg, desc) for name, desc in pairs if (tg := _sanitize_telegram_name(name))]",
+                     "return [(tg, _TELEGRAM_ZH_DESCRIPTIONS.get(name, desc)) for name, desc in pairs if (tg := _sanitize_telegram_name(name))]"),
+                ]:
+                    if old_ret in cand:
+                        cand = cand.replace(old_ret, new_ret, 1)
 
                 return cand
 
