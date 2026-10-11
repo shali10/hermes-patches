@@ -171,7 +171,7 @@ def main():
     if runner_file.is_file():
         runner_code = runner_file.read_text(encoding="utf-8")
         assert "_global_display_streaming" in runner_code, "_global_display_streaming missing in gateway/run_turn_runner.py"
-        assert '"cache_read_tokens": getattr(agent, "session_cache_read_tokens"' in runner_code, "cache_read_tokens missing in usage dict"
+        assert "session_cache_read_tokens" in runner_code and '"cache_read_tokens"' in runner_code, "cache_read_tokens missing in usage dict"
     else:
         run_code = run_file.read_text(encoding="utf-8")
         assert "_global_display_streaming" in run_code, "_global_display_streaming missing in gateway/run.py"
@@ -187,9 +187,13 @@ def main():
     cli_mixin = target_dir / "hermes_cli/cli_stream_mixin.py"
     stream_think = target_dir / "gateway/stream_consumer_think.py"
 
-    cli_code = cli_mixin.read_text(encoding="utf-8") if cli_mixin.is_file() else cli_file.read_text(encoding="utf-8")
-    stream_code = stream_think.read_text(encoding="utf-8") if stream_think.is_file() else stream_file.read_text(encoding="utf-8")
-    assert "<antml:thought>" in cli_code and "<antml:thought>" in stream_code, "Thought tags missing in clean-thinking"
+    scrubber_file = target_dir / "agent/think_scrubber.py"
+    if scrubber_file.is_file():
+        assert "antml:thought" in scrubber_file.read_text(encoding="utf-8"), "antml:thought missing in agent/think_scrubber.py"
+    else:
+        cli_code = cli_mixin.read_text(encoding="utf-8") if cli_mixin.is_file() else cli_file.read_text(encoding="utf-8")
+        stream_code = stream_think.read_text(encoding="utf-8") if stream_think.is_file() else stream_file.read_text(encoding="utf-8")
+        assert "<antml:thought>" in cli_code and "<antml:thought>" in stream_code, "Thought tags missing in clean-thinking"
 
     # -------------------------------------------------------------
     # 8. Telegram 4096 Smart Split

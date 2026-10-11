@@ -5,6 +5,22 @@
 
 ---
 
+## [v1.7.0] - 2026-10-11
+
+### ⚙️ 上游 Hermes Agent v0.21.6 架构适配与 Runtime Footer 全链路加固
+- **运行时调度链拆迁适配 (run_turn.py Architecture Migration)**：
+  - 适配上游 Gateway 运行时调度主循环由 `gateway/run.py` 拆迁至 `gateway/run_turn.py` 的解耦改造；
+  - 在 `run_turn.py` 的 `_hmwa_runtime_footer_line` 调度入口精准注入 `prompt_tokens`、`output_tokens` 与 `cache_read_tokens`，打通 Token 与上下文指标传递链路。
+- **Runtime Footer 签名与容错加固 (Runtime Footer Signature Hardening)**：
+  - 适配上游 `build_footer_line` 与 `format_runtime_footer` 新增的 `requested_model`、`served_model` 等参数及 `**kwargs` 透传；
+  - 彻底杜绝因关键字缺失导致的 `TypeError` 异常，消除页脚静默缺失隐患；
+  - 保持全量 6 维指标（🤖 模型、🧠 Prompt总量、💾 缓存命中、📤 输出、🎯 上下文%、⏱️ 耗时）精准解析。
+- **测试套件与看门狗解释器对齐**：
+  - 更新 `tests/test_behavior.py` 兼容最新模块化结构；
+  - 修复看门狗脚本环境解析路径，杜绝环境独立 Python 导致的偶发误报。
+
+---
+
 ## [v1.6.1] - 2026-09-08
 
 ### 🔄 交互控制台持续会话主循环与状态实时刷新
