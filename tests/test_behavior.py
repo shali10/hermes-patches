@@ -87,7 +87,7 @@ def main():
     # -------------------------------------------------------------
     # 1. Runtime Footer
     # -------------------------------------------------------------
-    print("Testing 1/10: Runtime Footer...")
+    print("Testing 1/8: Runtime Footer...")
     from gateway.runtime_footer import format_runtime_footer
     line = format_runtime_footer(
         model="gemini-3.7-flash-high",
@@ -107,7 +107,7 @@ def main():
     # -------------------------------------------------------------
     # 2. Telegram CJK Table Bypass
     # -------------------------------------------------------------
-    print("Testing 2/10: Telegram CJK Table Bypass...")
+    print("Testing 2/8: Telegram CJK Table Bypass...")
     from plugins.platforms.telegram.adapter import TelegramAdapter
     adapter = TelegramAdapter.__new__(TelegramAdapter)
     table_sample = "测试表格\n| a | b |\n|---|---|\n| 1 | 2 |"
@@ -117,7 +117,7 @@ def main():
     # -------------------------------------------------------------
     # 3. Telegram Chinese Commands
     # -------------------------------------------------------------
-    print("Testing 3/10: Telegram Chinese Commands...")
+    print("Testing 3/8: Telegram Chinese Commands...")
     try:
         from hermes_cli.commands_platforms import telegram_bot_commands
     except ImportError:
@@ -132,7 +132,7 @@ def main():
     # -------------------------------------------------------------
     # 4. State DB Hardening
     # -------------------------------------------------------------
-    print("Testing 4/10: State DB Hardening...")
+    print("Testing 4/8: State DB Hardening...")
     state_file = target_dir / "hermes_state.py"
     wal_file = target_dir / "hermes_state_wal.py"
     messages_file = target_dir / "hermes_state_messages.py"
@@ -151,37 +151,16 @@ def main():
         assert "FK self-heal: ensure the session parent row exists" in state_code, "FK self-heal missing in append_message"
         assert "FK batch self-heal" in state_code, "FK batch self-heal missing in append_messages_batch"
 
-    # -------------------------------------------------------------
-    # 5. Tirith Low-Severity
-    # -------------------------------------------------------------
-    print("Testing 5/10: Tirith Low-Severity Approval...")
-    approval_code = (target_dir / "tools/approval.py").read_text(encoding="utf-8")
-    if "tirith" in approval_code or "_skip_low_warn" in approval_code:
-        assert "_skip_low_warn" in approval_code, "_skip_low_warn missing in tools/approval.py"
-        assert 'return {"approved": True, "message": None}' in approval_code, "Dict return contract missing in _skip_low_warn"
-    else:
-        print("  -> Tirith integration retired upstream; skipping patch assertion.")
-
-    # -------------------------------------------------------------
-    # 6. Streaming Control + Gateway cache-read transport
-    # -------------------------------------------------------------
-    print("Testing 6/10: Streaming Control & Cache Tokens Transport...")
-    run_file = target_dir / "gateway/run.py"
+    # Also verify token metrics transport in runner
     runner_file = target_dir / "gateway/run_turn_runner.py"
     if runner_file.is_file():
         runner_code = runner_file.read_text(encoding="utf-8")
-        assert "_global_display_streaming" in runner_code, "_global_display_streaming missing in gateway/run_turn_runner.py"
         assert "session_cache_read_tokens" in runner_code and '"cache_read_tokens"' in runner_code, "cache_read_tokens missing in usage dict"
-    else:
-        run_code = run_file.read_text(encoding="utf-8")
-        assert "_global_display_streaming" in run_code, "_global_display_streaming missing in gateway/run.py"
-        assert run_code.count('"cache_read_tokens": _cache_read_toks') == 2, "cache_read_tokens payload count != 2"
-        assert run_code.count('_cache_read_toks = getattr(_agent, "session_cache_read_tokens", 0) or 0') == 1, "_cache_read_toks extraction count != 1"
 
     # -------------------------------------------------------------
     # 7. Clean Thinking
     # -------------------------------------------------------------
-    print("Testing 7/10: Clean Thinking...")
+    print("Testing 5/8: Clean Thinking...")
     cli_file = target_dir / "cli.py"
     stream_file = target_dir / "gateway/stream_consumer.py"
     cli_mixin = target_dir / "hermes_cli/cli_stream_mixin.py"
@@ -198,21 +177,21 @@ def main():
     # -------------------------------------------------------------
     # 8. Telegram 4096 Smart Split
     # -------------------------------------------------------------
-    print("Testing 8/10: Telegram 4096 Smart Split...")
+    print("Testing 6/8: Telegram 4096 Smart Split...")
     base_code = (target_dir / "gateway/platforms/base.py").read_text(encoding="utf-8")
     assert "hermes-patches smart-split" in base_code, "smart-split missing in gateway/platforms/base.py"
 
     # -------------------------------------------------------------
     # 9. Terminal CWD Recovery
     # -------------------------------------------------------------
-    print("Testing 9/10: Terminal CWD Recovery...")
+    print("Testing 7/8: Terminal CWD Recovery...")
     env_base_code = (target_dir / "tools/environments/base.py").read_text(encoding="utf-8")
     assert "_resolve_safe_cwd" in env_base_code, "Safe cwd recovery missing in tools/environments/base.py"
 
     # -------------------------------------------------------------
     # 10. State DB Anti-Destruction Guard
     # -------------------------------------------------------------
-    print("Testing 10/10: State DB Anti-Destruction Guard...")
+    print("Testing 8/8: State DB Anti-Destruction Guard...")
     app_file = target_dir / "tools/approval.py"
     app_detect_file = target_dir / "tools/approval_detection.py"
     approval_full_code = app_detect_file.read_text(encoding="utf-8") if app_detect_file.is_file() else app_file.read_text(encoding="utf-8")
@@ -239,27 +218,27 @@ def main():
     # -------------------------------------------------------------
     # 11. Multi-selection Token Expansion & Status Probing (v1.6.0)
     # -------------------------------------------------------------
-    print("Testing 11/12: Multi-selection Expansion & Status Probing (v1.6.0)...")
+    print("Testing 9/10: Multi-selection Expansion & Status Probing...")
     repo_root = Path(__file__).resolve().parent.parent
     sys.path.insert(0, str(repo_root))
     import hermes_patches
 
     # Test token expansion
     assert hermes_patches.expand_selection_tokens(["2", "3"]) == {"footer", "table"}
-    assert hermes_patches.expand_selection_tokens(["2,3,7"]) == {"footer", "table", "nostream"}
+    assert hermes_patches.expand_selection_tokens(["2,3,7"]) == {"footer", "table", "smart-split"}
     assert hermes_patches.expand_selection_tokens(["2-5"]) == {"footer", "table", "menu", "db"}
-    assert hermes_patches.expand_selection_tokens(["2~4, 11"]) == {"footer", "table", "menu", "state-guard"}
+    assert hermes_patches.expand_selection_tokens(["2~4, 9"]) == {"footer", "table", "menu", "state-guard"}
 
     # Test check_all_statuses against target_dir
     engine = hermes_patches.PatchEngine(target_dir=target_dir, dry_run=True, verbose=False)
     statuses = engine.check_all_statuses()
-    assert len(statuses) == 10, f"Expected 10 patches, got {len(statuses)}"
-    assert all(s["applied"] for s in statuses), "Target directory should have all 10 patches applied"
+    assert len(statuses) == 8, f"Expected 8 patches, got {len(statuses)}"
+    assert all(s["applied"] for s in statuses), "Target directory should have all 8 patches applied"
 
     # -------------------------------------------------------------
     # 12. Interactive Console Main Loop & Session Flow (v1.6.1)
     # -------------------------------------------------------------
-    print("Testing 12/12: Interactive Console Main Loop & Session Flow (v1.6.1)...")
+    print("Testing 10/10: Interactive Console Main Loop & Session Flow...")
     from unittest.mock import patch as mock_patch
 
     # Test 12a: Option 0 directly exits

@@ -5,6 +5,21 @@
 
 ---
 
+## [v1.8.0] - 2026-10-11
+
+### 🧹 冗余补丁退役瘦身与架构精简 (Tirith & Streaming-Shield Retirement)
+- **退役 Tirith 低风险免打扰补丁 (`patch_approval_tirith`)**：
+  - 上游 Hermes Agent v0.21.6 彻底下线并移除了内置的 Tirith 静态安全扫描器；
+  - 正式移除该废弃补丁，消除空转探测。
+- **退役流式静默频控补丁 (`patch_streaming_control`)**：
+  - 上游已原生提供平台级流式关闭机制（`display.platforms.<plat>.streaming: false`）；
+  - 退役全局桥接补丁，消除对 `gateway/run_turn_runner.py` 的侵入式变更，完全收敛至上游原生配置支持。
+- **补丁矩阵全面收敛至 8 项**：
+  - 核心保留补丁重构映射至 2~9 号，原有长短别名与数字编号保持完整向下兼容；
+  - 自动化测试用例 `tests/test_behavior.py` 同步对齐 8/8 全量通过。
+
+---
+
 ## [v1.7.0] - 2026-10-11
 
 ### ⚙️ 上游 Hermes Agent v0.21.6 架构适配与 Runtime Footer 全链路加固

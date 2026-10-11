@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 import json
 
-__version__ = "1.7.0"
+__version__ = "1.8.0"
 
 
 PATCH_REGISTRY = [
@@ -61,55 +61,38 @@ PATCH_REGISTRY = [
         "description": "设置连接级 busy_timeout=5000 缓解锁表，并自动补齐会话父记录根除外键崩溃。",
     },
     {
-        "id": "tirith",
-        "num": 6,
-        "aliases": ["approval", "security", "low-warn", "6", "patch-6"],
-        "name": "⚡ Tirith 低风险扫描审批免打扰",
-        "method": "patch_approval_tirith",
-        "description": "自动放行 LOW/INFO 级别的低危静态扫描提示，高危风险正常拦截，提升自动化流畅度。",
-    },
-    {
-        "id": "nostream",
-        "num": 7,
-        "aliases": ["no-stream", "quiet-stream", "disable-streaming", "stream-shield", "7", "patch-7"],
-        "name": "🚫 流式输出静默控制与 429 频控护盾",
-        "method": "patch_streaming_control",
-        "description": "支持全局 display.streaming: false 优雅静默，消除中间消息狂闪并彻底免除 429 封禁。",
-    },
-    {
         "id": "clean-think",
-        "num": 8,
-        "aliases": ["think", "reasoning", "clean-reasoning", "suppress-thinking", "8", "patch-8"],
+        "num": 6,
+        "aliases": ["think", "reasoning", "clean-reasoning", "suppress-thinking", "6", "8", "patch-6", "patch-8"],
         "name": "🧠 全链路深度思考过程强力净化",
         "method": "patch_clean_thinking",
         "description": "全链路剥离 <think> 等变体思考标签与未闭合块，CLI 默认静音冗余思维链弹框。",
     },
     {
         "id": "smart-split",
-        "num": 9,
-        "aliases": ["split", "telegram-split", "chunking", "message-chunker", "9", "patch-9"],
+        "num": 7,
+        "aliases": ["split", "telegram-split", "chunking", "message-chunker", "7", "9", "patch-7", "patch-9"],
         "name": "✂️ Telegram 4096 长消息智能段落切分",
         "method": "patch_smart_split",
-        "description": "4096+ 字符长消息优先在自然段落 (\\n\\n) 边界切分，自动补齐代码围栏与表格结构。",
+        "description": "4096+ 字符长消息优先在自然段落 (\n\n) 边界切分，自动补齐代码围栏与表格结构。",
     },
     {
         "id": "terminal-cwd",
-        "num": 10,
-        "aliases": ["cwd", "terminal", "deleted-workdir", "cwd-recovery", "10", "patch-10"],
+        "num": 8,
+        "aliases": ["cwd", "terminal", "deleted-workdir", "cwd-recovery", "8", "10", "patch-8", "patch-10"],
         "name": "📁 Terminal 失效工作目录自动回退",
         "method": "patch_terminal_cwd_recovery",
         "description": "显式 workdir 被删除后，在构建命令 wrapper 前回退到可用父目录，避免 exit 126。",
     },
     {
         "id": "state-guard",
-        "num": 11,
-        "aliases": ["db-guard", "anti-delete", "state-db-guard", "guard", "11", "patch-11"],
+        "num": 9,
+        "aliases": ["db-guard", "anti-delete", "state-db-guard", "guard", "9", "11", "patch-9", "patch-11"],
         "name": "🧱 SQLite 主库防误删护栏 (State DB Anti-Destruction Guard)",
         "method": "patch_state_db_guard",
         "description": "对 live state.db 注入动作级防删护栏，精准拦截 rm/truncate/>/find-delete 误删，免除全量丢失风险。",
     },
 ]
-
 
 def expand_selection_tokens(tokens: Optional[Iterable[str]]) -> Optional[Set[str]]:
     """
@@ -820,68 +803,6 @@ def build_footer_line(
                 return ok_mono
 
         return ok_wal and ok_msg
-
-    # -------------------------------------------------------------
-    # Patch 5: Tirith Low-Severity Approval Prompt Skip
-    # -------------------------------------------------------------
-    def patch_approval_tirith(self) -> bool:
-        app_file = self.target_dir / "tools/approval.py"
-        if not app_file.is_file():
-            self.log("⚡ Tirith 低风险扫描审批免打扰", "skipped", "未找到 tools/approval.py")
-            return False
-
-        app_src = app_file.read_text(encoding="utf-8")
-        # Upstream Hermes Agent (v0.21.6+, Config v50) retired the bundled tirith scanner completely.
-        if "tirith" not in app_src and "tirith_result" not in app_src:
-            self.log("⚡ Tirith 低风险免打扰", "unchanged", "上游已退役外部扫描器 (原生免打扰)")
-            return True
-
-        def transform(src: str) -> str:
-            cand = src
-            if "_skip_low_warn" in cand:
-                return cand
-
-            old_check = '''    if tirith_result["action"] in {"block", "warn"}:\n        findings = tirith_result.get("findings") or []\n        rule_id = findings[0].get("rule_id", "unknown") if findings else "unknown"'''
-
-            new_check = '''    if tirith_result["action"] in {"block", "warn"}:\n        findings = tirith_result.get("findings") or []\n        _skip_low_warn = (\n            tirith_result.get("action") == "warn"\n            and bool(findings)\n            and all(str(f.get("severity", "")).upper() in {"LOW", "INFO", ""} for f in findings)\n        )\n        if _skip_low_warn:\n            return {"approved": True, "message": None}\n        rule_id = findings[0].get("rule_id", "unknown") if findings else "unknown"'''
-
-            if old_check in cand:
-                cand = cand.replace(old_check, new_check, 1)
-            return cand
-
-        return self.apply_file_patch("tools/approval.py", transform, "⚡ Tirith 低风险免打扰")
-
-    # -------------------------------------------------------------
-    # Patch 6: Gateway Streaming Control & Flood Limit Shield
-    # -------------------------------------------------------------
-    def patch_streaming_control(self) -> bool:
-        if (self.target_dir / "gateway/run_turn_runner.py").is_file():
-            def transform_runner(src: str) -> str:
-                cand = src
-                if "_global_display_streaming" in cand:
-                    return cand
-
-                anchor = 'plat_streaming = ctx.resolve_display_setting(ctx.user_config, platform_key, "streaming")'
-                stream_guard = """        # Check global display.streaming setting (hermes-patches stream-shield)\n        _global_display_streaming = None\n        if isinstance(ctx.user_config, dict):\n            _global_display_streaming = (ctx.user_config.get("display") or {}).get("streaming")\n        if plat_streaming is None and _global_display_streaming is not None:\n            plat_streaming = bool(_global_display_streaming)\n"""
-                if anchor in cand:
-                    cand = cand.replace(anchor, anchor + "\n" + stream_guard, 1)
-                return cand
-            return self.apply_file_patch("gateway/run_turn_runner.py", transform_runner, "🚫 流式控制与 429 护盾 (Runner)")
-
-        def transform(src: str) -> str:
-            cand = src
-            if "_global_display_streaming" in cand:
-                return cand
-
-            old_gate = '''        # Per-platform streaming gate: display.platforms.<plat>.streaming\n        # can disable streaming for specific platforms even when the global\n        # streaming config is enabled.\n        _plat_streaming = ctx.resolve_display_setting(\n            ctx.user_config, platform_key, "streaming"\n        )\n        # None = no per-platform override → follow global config\n        _streaming_enabled = (\n            _scfg.enabled and _scfg.transport != "off"\n            if _plat_streaming is None\n            else bool(_plat_streaming)\n        )'''
-
-            new_gate = '''        # Per-platform streaming gate: display.platforms.<plat>.streaming\n        # can disable streaming for specific platforms even when the global\n        # streaming config is enabled.\n        _plat_streaming = ctx.resolve_display_setting(\n            ctx.user_config, platform_key, "streaming"\n        )\n        # Check global display.streaming setting (hermes-patches stream-shield)\n        _global_display_streaming = None\n        if isinstance(ctx.user_config, dict):\n            _global_display_streaming = (ctx.user_config.get("display") or {}).get("streaming")\n        if _plat_streaming is None and _global_display_streaming is not None:\n            _plat_streaming = bool(_global_display_streaming)\n\n        # None = no per-platform override → follow global config\n        _streaming_enabled = (\n            _scfg.enabled and _scfg.transport != "off"\n            if _plat_streaming is None\n            else bool(_plat_streaming)\n        )'''
-
-            if old_gate in cand:
-                cand = cand.replace(old_gate, new_gate, 1)
-            return cand
-
-        return self.apply_file_patch("gateway/run.py", transform, "🚫 流式控制与 429 护盾")
 
     # -------------------------------------------------------------
     # Patch 7: Deep Thinking & Reasoning Process Cleaner

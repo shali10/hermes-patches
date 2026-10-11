@@ -332,12 +332,10 @@ get_patch_name_by_num() {
         3) echo "📑 Telegram CJK 原生 Markdown 表格放行" ;;
         4) echo "🇨🇳 Telegram 快捷菜单与 /help /commands 全中文汉化" ;;
         5) echo "🛡️ SQLite 生产级外键自愈与高并发防锁死" ;;
-        6) echo "⚡ Tirith 低风险扫描审批免打扰" ;;
-        7) echo "🚫 流式输出静默控制与 429 频控防护" ;;
-        8) echo "🧠 全链路深度思考过程强力净化" ;;
-        9) echo "✂️ Telegram 4096 长消息智能段落切分" ;;
-        10) echo "📁 Terminal 失效工作目录自动回退" ;;
-        11) echo "🧱 SQLite 主库防误删护栏" ;;
+        6) echo "🧠 全链路深度思考过程强力净化" ;;
+        7) echo "✂️ Telegram 4096 长消息智能段落切分" ;;
+        8) echo "📁 Terminal 失效工作目录自动回退" ;;
+        9) echo "🧱 SQLite 主库防误删护栏" ;;
         *) echo "" ;;
     esac
 }
@@ -348,12 +346,10 @@ map_num_to_patch() {
         3) echo "table" ;;
         4) echo "menu" ;;
         5) echo "db" ;;
-        6) echo "tirith" ;;
-        7) echo "nostream" ;;
-        8) echo "clean-think" ;;
-        9) echo "smart-split" ;;
-        10) echo "terminal-cwd" ;;
-        11) echo "state-guard" ;;
+        6) echo "clean-think" ;;
+        7) echo "smart-split" ;;
+        8) echo "terminal-cwd" ;;
+        9) echo "state-guard" ;;
         *) echo "" ;;
     esac
 }
@@ -370,19 +366,19 @@ parse_selection_tokens() {
             local e="${BASH_REMATCH[2]}"
             if [ "$s" -le "$e" ]; then
                 for ((i=s; i<=e; i++)); do
-                    if [ "$i" -ge 2 ] && [ "$i" -le 11 ]; then
+                    if [ "$i" -ge 2 ] && [ "$i" -le 9 ]; then
                         result_nums+=("$i")
                     fi
                 done
             else
                 for ((i=s; i>=e; i--)); do
-                    if [ "$i" -ge 2 ] && [ "$i" -le 11 ]; then
+                    if [ "$i" -ge 2 ] && [ "$i" -le 9 ]; then
                         result_nums+=("$i")
                     fi
                 done
             fi
         elif [[ "$token" =~ ^[0-9]+$ ]]; then
-            if [ "$token" -ge 2 ] && [ "$token" -le 11 ]; then
+            if [ "$token" -ge 2 ] && [ "$token" -le 9 ]; then
                 result_nums+=("$token")
             fi
         fi
@@ -409,12 +405,10 @@ show_menu() {
     echo -e " [3]  $(get_status_badge 3)  📑 Telegram CJK 原生 Markdown 表格放行"
     echo -e " [4]  $(get_status_badge 4)  🇨🇳 Telegram 快捷菜单与 /help /commands 全中文汉化"
     echo -e " [5]  $(get_status_badge 5)  🛡️ SQLite 生产级外键自愈与高并发防锁死"
-    echo -e " [6]  $(get_status_badge 6)  ⚡ Tirith 低风险扫描审批免打扰"
-    echo -e " [7]  $(get_status_badge 7)  🚫 流式输出静默控制与 429 频控防护"
-    echo -e " [8]  $(get_status_badge 8)  🧠 全链路深度思考过程强力净化"
-    echo -e " [9]  $(get_status_badge 9)  ✂️ Telegram 4096 长消息智能段落切分"
-    echo -e " [10] $(get_status_badge 10) 📁 Terminal 失效工作目录自动回退"
-    echo -e " [11] $(get_status_badge 11) 🧱 SQLite 主库防误删护栏"
+    echo -e " [6]  $(get_status_badge 6)  🧠 全链路深度思考过程强力净化"
+    echo -e " [7]  $(get_status_badge 7)  ✂️ Telegram 4096 长消息智能段落切分"
+    echo -e " [8]  $(get_status_badge 8)  📁 Terminal 失效工作目录自动回退"
+    echo -e " [9]  $(get_status_badge 9)  🧱 SQLite 主库防误删护栏"
     echo -e " ---------------------------------------------------"
     echo -e " [12] 🔍 预览变更 (Dry Run，不写入磁盘)"
     echo -e " [13] ↩️ 卸载补丁并无损还原 (.bak 原生回滚)"
@@ -484,7 +478,7 @@ while true; do
             echo -e "\n${BOLD}${GREEN}🎉 补丁操作已全部完成并实时生效！${NC}\n"
             detect_and_report_daemon
             ;;
-        12)
+        10|12)
             echo -e "${YELLOW}正在执行 Dry-Run 预检分析...${NC}\n"
             "$PYTHON_BIN" "$PATCH_SCRIPT" --target "$HERMES_DIR" --dry-run --verbose
             ;;
