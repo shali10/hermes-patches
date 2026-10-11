@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 import json
 
-__version__ = "1.6.1"
+__version__ = "1.7.0"
 
 
 PATCH_REGISTRY = [
@@ -274,203 +274,198 @@ class PatchEngine:
     def patch_runtime_footer(self) -> bool:
         def transform_footer(src: str) -> str:
             cand = src
-            # 1. Separator
+            if "🧠 Prompt总量" in cand and "cache_read_tokens: Optional[int]" in cand:
+                return cand
+
             cand = cand.replace('_SEP = " · "', '_SEP = " | "')
 
-            # 2. _fmt_int helper
+            old_df = '_DEFAULT_FIELDS: tuple[str, ...] = ("model", "context_pct", "cwd")'
+            new_df = '''_DEFAULT_FIELDS: tuple[str, ...] = (
+    "model",
+    "prompt_tokens",
+    "cache_read",
+    "output_tokens",
+    "context_pct",
+    "elapsed_time",
+)'''
+            if old_df in cand:
+                cand = cand.replace(old_df, new_df, 1)
+
             if "def _fmt_int(" not in cand and "def format_runtime_footer(" in cand:
-                helper = '''def _fmt_int(n: int) -> str:
-    """Thousands-separated integer (``12345`` → ``12,345``)."""
+                helper = """def _fmt_int(n: int) -> str:
     return f"{n:,}"
 
 
-def format_runtime_footer('''
-                cand = cand.replace("def format_runtime_footer(", helper, 1)
+"""
+                cand = cand.replace("def format_runtime_footer(", helper + "def format_runtime_footer(", 1)
 
-            # 3. format_runtime_footer signature (supports multiline and singleline)
-            if "prompt_tokens: Optional[int] = None" not in cand:
-                old_sig = "    fields: Iterable[str] = _DEFAULT_FIELDS,\n) -> str:"
-                new_sig = "    fields: Iterable[str] = _DEFAULT_FIELDS,\n    prompt_tokens: Optional[int] = None,\n    output_tokens: Optional[int] = None,\n    cache_read_tokens: Optional[int] = None,\n) -> str:"
-                if old_sig in cand:
-                    cand = cand.replace(old_sig, new_sig, 1)
-                else:
-                    sig_pat = r'(\s*fields:\s*Iterable\[str\]\s*=\s*_DEFAULT_FIELDS\s*,?\s*\)\s*->\s*str:)'
-                    cand = re.sub(sig_pat, "\n" + new_sig, cand, count=1)
-
-            # 4. format fields mapping (supports both legacy loop and new renderers dict)
-            if "🧠 Prompt总量" not in cand:
-                if "renderers = {" in cand:
-                    new_renderers_block = '''    _p_in = prompt_tokens or 0
+            footer_def = """def format_runtime_footer(
+    *,
+    model: Optional[str] = None,
+    context_tokens: int = 0,
+    context_length: Optional[int] = None,
+    cwd: Optional[str] = None,
+    turn_seconds: Optional[float] = None,
+    latency_seconds: Optional[float] = None,
+    elapsed_time: Optional[float] = None,
+    requested_model: Optional[str] = None,
+    served_model: Optional[str] = None,
+    fields: Iterable[str] = _DEFAULT_FIELDS,
+    prompt_tokens: Optional[int] = None,
+    output_tokens: Optional[int] = None,
+    cache_read_tokens: Optional[int] = None,
+    cache_write_tokens: Optional[int] = None,
+    **kwargs: Any,
+) -> str:
+    _p_in = prompt_tokens or 0
     _c_in = cache_read_tokens or 0
     _total_prompt = _p_in if _p_in >= _c_in else _p_in + _c_in
+    if not _total_prompt and context_tokens:
+        _total_prompt = context_tokens
+
+    def context_pct() -> str:
+        _ctx = context_tokens or _total_prompt or 0
+        if context_length and context_length > 0 and _ctx >= 0:
+            return f"{max(0, min(100, round((_ctx / context_length) * 100)))}%"
+        return ""
+
+    def served() -> str:
+        requested = requested_model or model
+        alias = _model_short(requested)
+        if served_model and served_model not in (alias, requested):
+            return f"{alias} → {served_model}"
+        return ""
+
+    duration = elapsed_time if elapsed_time is not None else (latency_seconds if latency_seconds is not None else turn_seconds)
 
     renderers = {
-        "model": lambda: f"🤖 {_model_short(model)}" if _model_short(model) else "",
+        "model": lambda: f"🤖 {_model_short(requested_model or model)}" if _model_short(requested_model or model) else "",
+        "served_model": served,
         "context_pct": lambda: f"🎯 上下文: {context_pct()}" if context_pct() else "",
-        "latency": lambda: f"⏱️ 耗时: {turn_seconds:.1f}s" if turn_seconds is not None and turn_seconds >= 0 else "",
-        "elapsed_time": lambda: f"⏱️ 耗时: {turn_seconds:.1f}s" if turn_seconds is not None and turn_seconds >= 0 else "",
+        "latency": lambda: f"⏱️ 耗时: {duration:.1f}s" if duration is not None and duration >= 0 else "",
+        "elapsed_time": lambda: f"⏱️ 耗时: {duration:.1f}s" if duration is not None and duration >= 0 else "",
         "cwd": lambda: _home_relative_cwd(cwd or _env_cwd()),
         "prompt_tokens": lambda: f"🧠 Prompt总量: {_fmt_int(_total_prompt)}" if _total_prompt else "",
         "output_tokens": lambda: f"📤 输出: {_fmt_int(output_tokens)}" if output_tokens else "",
         "cache_read": lambda: f"💾 缓存命中: {_fmt_int(cache_read_tokens)} ({max(0, min(100, round((cache_read_tokens / _total_prompt) * 100)))}%)" if (_total_prompt and cache_read_tokens is not None and cache_read_tokens >= 0) else "",
-    }'''
-                    cand = re.sub(r'(\s*renderers\s*=\s*\{.*?\n\s*\})', "\n" + new_renderers_block, cand, count=1, flags=re.DOTALL)
-                else:
-                    new_loop = '''for field in fields:
-        _p_in = prompt_tokens or 0
-        _c_in = cache_read_tokens or 0
-        _total_prompt = _p_in if _p_in >= _c_in else _p_in + _c_in
-        if field == "model":
-            m = _model_short(model)
-            if m:
-                parts.append(f"🤖 {m}")
-        elif field == "context_pct":
-            if context_length and context_length > 0 and context_tokens >= 0:
-                pct = max(0, min(100, round((context_tokens / context_length) * 100)))
-                parts.append(f"🎯 上下文: {pct}%")
-        elif field == "latency" or field == "elapsed_time":
-            if turn_seconds is not None and turn_seconds >= 0:
-                parts.append(f"⏱️ 耗时: {turn_seconds:.1f}s")
-        elif field == "cwd":
-            rel = _home_relative_cwd(cwd or os.environ.get("TERMINAL_CWD", ""))
-            if rel:
-                parts.append(rel)
-        elif field == "prompt_tokens":
-            if _total_prompt:
-                parts.append(f"🧠 Prompt总量: {_fmt_int(_total_prompt)}")
-        elif field == "output_tokens":
-            if output_tokens:
-                parts.append(f"📤 输出: {_fmt_int(output_tokens)}")
-        elif field == "cache_read":
-            if _total_prompt and cache_read_tokens is not None and cache_read_tokens >= 0:
-                pct = max(0, min(100, round((cache_read_tokens / _total_prompt) * 100)))
-                parts.append(f"💾 缓存命中: {_fmt_int(cache_read_tokens)} ({pct}%)")'''
+        "cache_read_tokens": lambda: f"💾 缓存命中: {_fmt_int(cache_read_tokens)} ({max(0, min(100, round((cache_read_tokens / _total_prompt) * 100)))}%)" if (_total_prompt and cache_read_tokens is not None and cache_read_tokens >= 0) else "",
+    }
+    target_fields = fields or _DEFAULT_FIELDS
+    return _SEP.join(v for field in target_fields if (render := renderers.get(field)) and (v := render()))
 
-                    loop_pat = r'for field in fields:.*?(?=\s*# Unknown field names are silently ignored\.)'
-                    if re.search(loop_pat, cand, flags=re.DOTALL):
-                        cand = re.sub(loop_pat, new_loop, cand, count=1, flags=re.DOTALL)
 
-            # 5. build_footer_line signature & invocation
-            old_bf_sig = "def build_footer_line(\n    *,\n    user_config: dict[str, Any] | None,\n    platform_key: str | None,\n    model: Optional[str],\n    context_tokens: int,\n    context_length: Optional[int],\n    cwd: Optional[str] = None,\n    turn_seconds: Optional[float] = None,\n) -> str:"
-            new_bf_sig = "def build_footer_line(\n    *,\n    user_config: dict[str, Any] | None,\n    platform_key: str | None,\n    model: Optional[str],\n    context_tokens: int,\n    context_length: Optional[int],\n    cwd: Optional[str] = None,\n    turn_seconds: Optional[float] = None,\n    prompt_tokens: Optional[int] = None,\n    output_tokens: Optional[int] = None,\n    cache_read_tokens: Optional[int] = None,\n    **kwargs: Any,\n) -> str:"
-            if old_bf_sig in cand:
-                cand = cand.replace(old_bf_sig, new_bf_sig, 1)
-            elif "prompt_tokens: Optional[int] = None" not in cand.split("def build_footer_line")[-1]:
-                bf_sig_pat = r'(def build_footer_line\([^)]*turn_seconds:\s*Optional\[float\]\s*=\s*None\s*,?\s*\)\s*->\s*str:)'
-                cand = re.sub(bf_sig_pat, new_bf_sig, cand, count=1)
-
-            old_bf_call = '        fields=cfg.get("fields") or _DEFAULT_FIELDS,\n    )'
-            new_bf_call = '        fields=cfg.get("fields") or _DEFAULT_FIELDS,\n        prompt_tokens=prompt_tokens,\n        output_tokens=output_tokens,\n        cache_read_tokens=cache_read_tokens,\n    )'
-            if "prompt_tokens=prompt_tokens," not in cand:
-                if old_bf_call in cand:
-                    cand = cand.replace(old_bf_call, new_bf_call, 1)
-                else:
-                    bf_call_pat = r'(fields=cfg\.get\("fields"\)\s*or\s*_DEFAULT_FIELDS\s*,?\s*\))'
-                    cand = re.sub(bf_call_pat, new_bf_call.strip(), cand, count=1)
-
-            # 6. Default fields and default enabled in resolve_footer_config
-            old_df = '_DEFAULT_FIELDS: tuple[str, ...] = ("model", "context_pct", "cwd")'
-            new_df = '_DEFAULT_FIELDS: tuple[str, ...] = ("model", "prompt_tokens", "cache_read", "output_tokens", "context_pct", "elapsed_time")'
-            if old_df in cand:
-                cand = cand.replace(old_df, new_df, 1)
-
-            old_res = 'resolved = {"enabled": False, "fields": list(_DEFAULT_FIELDS)}'
-            new_res = 'resolved = {"enabled": True, "fields": list(_DEFAULT_FIELDS)}'
-            if old_res in cand:
-                cand = cand.replace(old_res, new_res, 1)
-
+def build_footer_line(
+    *,
+    user_config: dict[str, Any] | None = None,
+    platform_key: str | None = None,
+    model: Optional[str] = None,
+    context_tokens: int = 0,
+    context_length: Optional[int] = None,
+    cwd: Optional[str] = None,
+    turn_seconds: Optional[float] = None,
+    latency_seconds: Optional[float] = None,
+    elapsed_time: Optional[float] = None,
+    requested_model: Optional[str] = None,
+    served_model: Optional[str] = None,
+    prompt_tokens: Optional[int] = None,
+    output_tokens: Optional[int] = None,
+    cache_read_tokens: Optional[int] = None,
+    cache_write_tokens: Optional[int] = None,
+    fields: Optional[Iterable[str]] = None,
+    **kwargs: Any,
+) -> str:
+    cfg = resolve_footer_config(user_config, platform_key)
+    if not cfg.get("enabled"):
+        return ""
+    eff_fields = fields or cfg.get("fields") or _DEFAULT_FIELDS
+    return format_runtime_footer(
+        model=model,
+        context_tokens=context_tokens,
+        context_length=context_length,
+        cwd=cwd,
+        turn_seconds=turn_seconds,
+        latency_seconds=latency_seconds,
+        elapsed_time=elapsed_time,
+        requested_model=requested_model,
+        served_model=served_model,
+        fields=eff_fields,
+        prompt_tokens=prompt_tokens,
+        output_tokens=output_tokens,
+        cache_read_tokens=cache_read_tokens,
+        cache_write_tokens=cache_write_tokens,
+        **kwargs,
+    )"""
+            old_footer_pat = r'def format_runtime_footer\(.*?(?=\Z)'
+            cand = re.sub(old_footer_pat, footer_def, cand, count=1, flags=re.DOTALL)
             return cand
 
         def transform_gateway_run(src: str) -> str:
             cand = src
-
-            # 1. Ensure _cache_read_toks variable is declared
-            if '_cache_read_toks = 0' not in cand and '_output_toks = 0' in cand:
-                cand = cand.replace('_output_toks = 0', '_output_toks = 0\n        _cache_read_toks = 0', 1)
-
-            # 2. Extract _cache_read_toks from agent in extraction blocks
-            target_extract = '_output_toks = getattr(_agent, "session_completion_tokens", 0)'
-            replacement_extract = '''_output_toks = getattr(_agent, "session_completion_tokens", 0)
-            _cache_read_toks = getattr(_agent, "session_cache_read_tokens", 0) or 0'''
-            if target_extract in cand and '_cache_read_toks = getattr(_agent' not in cand:
-                cand = cand.replace(target_extract, replacement_extract)
-
-            # 3. Inject "cache_read_tokens": _cache_read_toks into return dicts
-            target_ret1 = '''                "input_tokens": _input_toks,
-                "output_tokens": _output_toks,'''
-            replacement_ret1 = '''                "input_tokens": _input_toks,
-                "output_tokens": _output_toks,
-                "cache_read_tokens": _cache_read_toks,'''
-            if target_ret1 in cand and '"cache_read_tokens": _cache_read_toks' not in cand:
-                cand = cand.replace(target_ret1, replacement_ret1)
-
-            target_ret2 = '''            "last_prompt_tokens": _last_prompt_toks,
-            "input_tokens": _input_toks,
-            "output_tokens": _output_toks,
-            "model": _resolved_model,'''
-            replacement_ret2 = '''            "last_prompt_tokens": _last_prompt_toks,
-            "input_tokens": _input_toks,
-            "output_tokens": _output_toks,
-            "cache_read_tokens": _cache_read_toks,
-            "model": _resolved_model,'''
-            if target_ret2 in cand:
-                cand = cand.replace(target_ret2, replacement_ret2, 1)
-
-            # 4. Parameter injection into build_footer_line
-            new_bfl = '''_footer_line = _bfl(
-                    user_config=_load_gateway_config(),
-                    platform_key=_platform_config_key(source.platform),
-                    model=agent_result.get("model"),
-                    context_tokens=agent_result.get("last_prompt_tokens", 0) or 0,
-                    context_length=agent_result.get("context_length") or None,
-                    cwd=os.environ.get("TERMINAL_CWD", ""),
-                    turn_seconds=_turn_seconds,
-                    prompt_tokens=agent_result.get("prompt_tokens") or agent_result.get("input_tokens") or 0,
-                    output_tokens=agent_result.get("output_tokens") or 0,
-                    cache_read_tokens=agent_result.get("cache_read_tokens") or 0,
-                )'''
-
-            bfl_block_pat = r'_footer_line\s*=\s*_bfl\(.*?\n\s*\)(?=\s*except Exception as _footer_err:)'
-            if re.search(bfl_block_pat, cand, flags=re.DOTALL):
-                cand = re.sub(bfl_block_pat, new_bfl, cand, count=1, flags=re.DOTALL)
-
-            # 5. platform key compatibility
-            old_pkey = '''def _platform_config_key(platform: "Platform") -> str:
+            if "platform == 'local'" not in cand:
+                old_pck = '''def _platform_config_key(platform: "Platform") -> str:
     """Map a Platform enum to its config.yaml key (LOCAL→"cli", rest→enum value)."""
     return "cli" if platform == Platform.LOCAL else platform.value'''
-
-            new_pkey = '''def _platform_config_key(platform: Any) -> str:
+                new_pck = '''def _platform_config_key(platform: Any) -> str:
     """Map a Platform enum to its config.yaml key (LOCAL→"cli", rest→enum value)."""
     if platform == Platform.LOCAL or platform == "local" or platform == "cli":
         return "cli"
     return getattr(platform, "value", str(platform) if platform is not None else "cli")'''
+                if old_pck in cand:
+                    cand = cand.replace(old_pck, new_pck, 1)
 
-            if old_pkey in cand:
-                cand = cand.replace(old_pkey, new_pkey, 1)
+            if "cache_read_tokens=agent_result.get" not in cand and "turn_seconds=_turn_seconds," in cand:
+                old_bfl = '''                    turn_seconds=_turn_seconds,
+                )'''
+                new_bfl = '''                    turn_seconds=_turn_seconds,
+                    prompt_tokens=agent_result.get("prompt_tokens") or agent_result.get("input_tokens") or 0,
+                    output_tokens=agent_result.get("output_tokens") or 0,
+                    cache_read_tokens=agent_result.get("cache_read_tokens") or 0,
+                )'''
+                if old_bfl in cand:
+                    cand = cand.replace(old_bfl, new_bfl, 1)
+            return cand
 
+        def transform_run_turn(src: str) -> str:
+            cand = src
+            if "prompt_tokens=agent_result.get" in cand:
+                return cand
+            old_call = '''                cwd=_terminal_scope_cwd(""), turn_seconds=_turn_seconds,
+                requested_model=agent_result.get("requested_model"),
+                served_model=agent_result.get("served_model"),
+            )'''
+            new_call = '''                cwd=_terminal_scope_cwd(""), turn_seconds=_turn_seconds,
+                requested_model=agent_result.get("requested_model"),
+                served_model=agent_result.get("served_model"),
+                prompt_tokens=agent_result.get("prompt_tokens") or agent_result.get("input_tokens") or 0,
+                output_tokens=agent_result.get("output_tokens") or 0,
+                cache_read_tokens=agent_result.get("cache_read_tokens") or 0,
+            )'''
+            if old_call in cand:
+                cand = cand.replace(old_call, new_call, 1)
+            return cand
+
+        def transform_run_turn_runner(src: str) -> str:
+            cand = src
+            if '"cache_read_tokens"' not in cand:
+                old_usage = '"output_tokens": getattr(agent, "session_completion_tokens", 0) if has_comp else 0,'
+                new_usage = '"output_tokens": getattr(agent, "session_completion_tokens", 0) if has_comp else 0,\n            "cache_read_tokens": (getattr(agent, "session_cache_read_tokens", 0) or 0) if has_comp else 0,'
+                if old_usage in cand:
+                    cand = cand.replace(old_usage, new_usage, 1)
             return cand
 
         def transform_usage_pricing(src: str) -> str:
             cand = src
-            if "cached_content_token_count" in cand:
-                return cand
-            
-            old_kw = """        if not cache_read_tokens:
-            # Kimi/Moonshot's native API (api.moonshot.cn / .ai) reports
-            # context-cache hits as a top-level usage.cached_tokens, not the
-            # OpenAI nested prompt_tokens_details.cached_tokens shape. Without
-            # this, direct Kimi sessions always showed 0 cache-hit tokens and
-            # the hits were billed at the full input rate (#65722).
+            old_shape = '(("prompt_tokens_details", "cached_tokens"), ("cache_read_input_tokens",), ("prompt_cache_hit_tokens",), ("cached_tokens",)),'
+            new_shape = '(("prompt_tokens_details", "cached_tokens"), ("cache_read_input_tokens",), ("prompt_cache_hit_tokens",), ("cached_tokens",), ("cached_content_token_count",), ("cachedContentTokenCount",), ("cached_prompt_tokens",)),'
+            if old_shape in cand:
+                cand = cand.replace(old_shape, new_shape, 1)
+
+            if "cached_content_token_count" not in cand:
+                old_kw = """        if not cache_read_tokens:
             cache_read_tokens = _usage_count(
                 _usage_get(response_usage, "cached_tokens", 0)
             )"""
-            
-            new_kw = """        if not cache_read_tokens:
-            # Kimi/Moonshot's native API (api.moonshot.cn / .ai) reports
-            # context-cache hits as a top-level usage.cached_tokens, not the
-            # OpenAI nested prompt_tokens_details.cached_tokens shape. Without
-            # this, direct Kimi sessions always showed 0 cache-hit tokens and
-            # the hits were billed at the full input rate (#65722).
+                new_kw = """        if not cache_read_tokens:
             cache_read_tokens = _usage_count(
                 _usage_get(response_usage, "cached_tokens", 0)
             )
@@ -485,145 +480,19 @@ def format_runtime_footer('''
         if not cache_read_tokens:
             cache_read_tokens = _usage_count(
                 _usage_get(response_usage, "cached_prompt_tokens", 0)
-            )
-        if not cache_read_tokens and details:
-            cache_read_tokens = _usage_count(
-                _usage_get(details, "cache_read_tokens", 0)
-            ) or _usage_count(
-                _usage_get(details, "cached_content_token_count", 0)
-            ) or _usage_count(
-                _usage_get(details, "cached_prompt_tokens", 0)
             )"""
-            
-            if old_kw in cand:
-                cand = cand.replace(old_kw, new_kw, 1)
-            return cand
-
-        def transform_conversation_loop(src: str) -> str:
-            cand = src
-            if "# Initialize base prompt cache tokens from previous conversation history" in cand and "from agent.usage_pricing import CanonicalUsage" in cand:
-                return cand
-            
-            # 1. Base initialization from conversation_history in run_conversation
-            base_anchor = """    agent._last_compaction_in_place = False
-    agent._last_compression_attempt_recorded = False
-    agent._last_compression_attempt_in_place = None"""
-
-            base_init = """    agent._last_compaction_in_place = False
-    agent._last_compression_attempt_recorded = False
-    agent._last_compression_attempt_in_place = None
-    # Initialize base prompt cache tokens from previous conversation history
-    if conversation_history:
-        try:
-            from agent.model_metadata import estimate_request_tokens_rough
-            _tools = getattr(agent, "tools", None) or None
-            _sys = getattr(agent, "_cached_system_prompt", "") or getattr(agent, "system_prompt", "") or ""
-            agent._session_base_prompt_tokens = estimate_request_tokens_rough(
-                conversation_history, system_prompt=_sys, tools=_tools
-            )
-        except Exception:
-            agent._session_base_prompt_tokens = 0
-    else:
-        agent._session_base_prompt_tokens = 0
-    agent._last_iter_prompt_tokens = 0"""
-
-            if base_anchor in cand and "# Initialize base prompt cache tokens from previous conversation history" not in cand:
-                cand = cand.replace(base_anchor, base_init, 1)
-
-            # 2. Immutable CanonicalUsage reconstruction on cache derivation
-            old_norm = """                if hasattr(response, 'usage') and response.usage:
-                    canonical_usage = normalize_usage(
-                        response.usage,
-                        provider=agent.provider,
-                        api_mode=agent.api_mode,
-                    )"""
-                    
-            new_norm = """                if hasattr(response, 'usage') and response.usage:
-                    canonical_usage = normalize_usage(
-                        response.usage,
-                        provider=agent.provider,
-                        api_mode=agent.api_mode,
-                    )
-                    # Adaptive prompt cache derivation when upstream proxy/provider omits cache stats
-                    if canonical_usage.cache_read_tokens == 0:
-                        _p_raw = canonical_usage.prompt_tokens or getattr(response.usage, "prompt_tokens", 0) or getattr(response.usage, "input_tokens", 0)
-                        _prev_p = getattr(agent, "_last_iter_prompt_tokens", 0) or getattr(agent, "_session_base_prompt_tokens", 0) or 0
-                        if _prev_p > 0 and _p_raw >= _prev_p:
-                            from agent.usage_pricing import CanonicalUsage
-                            _inf_cache = min(_p_raw, _prev_p)
-                            canonical_usage = CanonicalUsage(
-                                input_tokens=max(0, _p_raw - _inf_cache),
-                                output_tokens=canonical_usage.output_tokens,
-                                cache_read_tokens=_inf_cache,
-                                cache_write_tokens=canonical_usage.cache_write_tokens,
-                                reasoning_tokens=canonical_usage.reasoning_tokens,
-                                request_count=canonical_usage.request_count,
-                                raw_usage=canonical_usage.raw_usage,
-                            )
-                    agent._last_iter_prompt_tokens = canonical_usage.prompt_tokens
-                    agent._session_base_prompt_tokens = canonical_usage.prompt_tokens"""
-
-            # Replace either the clean original or the previous patch iteration
-            if old_norm in cand:
-                cand = cand.replace(old_norm, new_norm, 1)
-            elif "# Adaptive prompt cache derivation when upstream proxy/provider omits cache stats" in cand:
-                pat = r"if hasattr\(response, 'usage'\) and response\.usage:\s+canonical_usage = normalize_usage\(.*?agent\._session_base_prompt_tokens = canonical_usage\.prompt_tokens"
-                cand = re.sub(pat, new_norm.strip(), cand, count=1, flags=re.DOTALL)
+                if old_kw in cand:
+                    cand = cand.replace(old_kw, new_kw, 1)
             return cand
 
         ok1 = self.apply_file_patch("gateway/runtime_footer.py", transform_footer, "📊 Runtime Footer 全量计量")
         ok2 = self.apply_file_patch("gateway/run.py", transform_gateway_run, "⚙️ Gateway 运行态参数注入")
-
-        # Upstream modular run_turn split (run_turn_runner.py & run_turn.py)
-        if (self.target_dir / "gateway/run_turn_runner.py").is_file():
-            def transform_runner_usage(src: str) -> str:
-                cand = src
-                if '"cache_read_tokens":' in cand:
-                    return cand
-                target_usage = '''        usage = {
-            "last_prompt_tokens": getattr(comp, "last_prompt_tokens", 0) if has_comp else 0,
-            "input_tokens": getattr(agent, "session_prompt_tokens", 0) if has_comp else 0,
-            "output_tokens": getattr(agent, "session_completion_tokens", 0) if has_comp else 0,'''
-                new_usage = '''        usage = {
-            "last_prompt_tokens": getattr(comp, "last_prompt_tokens", 0) if has_comp else 0,
-            "input_tokens": getattr(agent, "session_prompt_tokens", 0) if has_comp else 0,
-            "output_tokens": getattr(agent, "session_completion_tokens", 0) if has_comp else 0,
-            "cache_read_tokens": getattr(agent, "session_cache_read_tokens", 0) if has_comp else 0,'''
-                if target_usage in cand:
-                    cand = cand.replace(target_usage, new_usage, 1)
-                return cand
-            self.apply_file_patch("gateway/run_turn_runner.py", transform_runner_usage, "⚙️ Runner 缓存 Token 计量传递")
-
         if (self.target_dir / "gateway/run_turn.py").is_file():
-            def transform_turn_footer(src: str) -> str:
-                cand = src
-                if "cache_read_tokens=agent_result.get" in cand:
-                    return cand
-                old_turn_bfl = '''            return _bfl(
-                user_config=_load_gateway_config(),
-                platform_key=_platform_config_key(source.platform), model=agent_result.get("model"),
-                context_tokens=agent_result.get("last_prompt_tokens", 0) or 0,
-                context_length=agent_result.get("context_length") or None,
-                cwd=_terminal_scope_cwd(""), turn_seconds=_turn_seconds,
-            )'''
-                new_turn_bfl = '''            return _bfl(
-                user_config=_load_gateway_config(),
-                platform_key=_platform_config_key(source.platform), model=agent_result.get("model"),
-                context_tokens=agent_result.get("last_prompt_tokens", 0) or 0,
-                context_length=agent_result.get("context_length") or None,
-                cwd=_terminal_scope_cwd(""), turn_seconds=_turn_seconds,
-                prompt_tokens=agent_result.get("prompt_tokens") or agent_result.get("input_tokens") or 0,
-                output_tokens=agent_result.get("output_tokens") or 0,
-                cache_read_tokens=agent_result.get("cache_read_tokens") or 0,
-            )'''
-                if old_turn_bfl in cand:
-                    cand = cand.replace(old_turn_bfl, new_turn_bfl, 1)
-                return cand
-            self.apply_file_patch("gateway/run_turn.py", transform_turn_footer, "⚙️ Turn 页脚计量参数直传")
-
+            self.apply_file_patch("gateway/run_turn.py", transform_run_turn, "⚙️ RunTurn 页脚参数注入")
+        if (self.target_dir / "gateway/run_turn_runner.py").is_file():
+            self.apply_file_patch("gateway/run_turn_runner.py", transform_run_turn_runner, "⚙️ Runner 缓存 Token 计量传递")
         ok3 = self.apply_file_patch("agent/usage_pricing.py", transform_usage_pricing, "🧠 多模型厂商全字段缓存解析")
-        ok4 = self.apply_file_patch("agent/conversation_loop.py", transform_conversation_loop, "⚡ 代理会话级智能前缀缓存补齐")
-        return ok1 and ok2 and ok3 and ok4
+        return ok1 and ok2 and ok3
 
     # -------------------------------------------------------------
     # Patch 2: Telegram CJK Native Rich Formatting & Table Bypass
@@ -756,17 +625,33 @@ def format_runtime_footer('''
 
         def transform(src: str) -> str:
             cand = src
-            if "alias_note_zh" in cand and "响应平台启动请求" in cand:
+            # Idempotency check
+            if "_TELEGRAM_ZH_DESCRIPTIONS" in cand and ("alias_note_zh" in cand or "zh_desc = _TELEGRAM_ZH_DESCRIPTIONS" in cand):
                 return cand
 
-            # Clean any legacy _TELEGRAM_ZH_DESCRIPTIONS block if present
-            if "_TELEGRAM_ZH_DESCRIPTIONS: dict[str, str] = {" in cand:
-                cand = re.sub(r'_TELEGRAM_ZH_DESCRIPTIONS:\s*dict\[str,\s*str\]\s*=\s*\{.*?\n\}', '', cand, flags=re.DOTALL)
+            # 1. Insert _TELEGRAM_ZH_DESCRIPTIONS dictionary
+            if "_TELEGRAM_ZH_DESCRIPTIONS" not in cand:
+                if "@dataclass(frozen=True)\nclass CommandDef:" in cand:
+                    cand = cand.replace("@dataclass(frozen=True)\nclass CommandDef:", zh_dict_block + "\n\n\n@dataclass(frozen=True)\nclass CommandDef:", 1)
+                elif "class CommandDef:" in cand:
+                    cand = cand.replace("class CommandDef:", zh_dict_block + "\n\n\nclass CommandDef:", 1)
+                elif "def _build_description(" in cand:
+                    cand = cand.replace("def _build_description(", zh_dict_block + "\n\n\ndef _build_description(", 1)
 
-            # 1. Update _build_description with zh_dict_block
-            if "_TELEGRAM_ZH_DESCRIPTIONS" not in cand and "def _build_description(" in cand:
-                cand = cand.replace("def _build_description(", zh_dict_block + "\n\n\ndef _build_description(", 1)
+            # 2. Modern upstream: CommandDef.describe(self) -> str
+            old_describe = '''    def describe(self) -> str:
+        """Localized description (``slash.<name>.description``); ``description`` is the English source."""
+        return _localized(f"slash.{self.name}.description", self.description)'''
+            new_describe = '''    def describe(self) -> str:
+        """Localized description (``slash.<name>.description``); ``description`` is the English source."""
+        zh_desc = _TELEGRAM_ZH_DESCRIPTIONS.get(self.name)
+        if zh_desc:
+            return zh_desc
+        return _localized(f"slash.{self.name}.description", self.description)'''
+            if old_describe in cand:
+                cand = cand.replace(old_describe, new_describe, 1)
 
+            # 3. Legacy upstream: _build_description
             old_bd_body_pat = r'def _build_description\(cmd:\s*CommandDef\)\s*->\s*str:\n(?:    [^\n]*\n)+'
             new_bd_body = '''def _build_description(cmd: CommandDef) -> str:
     """Build a CLI-facing description string including usage hint."""
@@ -775,42 +660,23 @@ def format_runtime_footer('''
         return f"{desc} (用法: /{cmd.name} {cmd.args_hint})"
     return desc
 '''
-            cand = re.sub(old_bd_body_pat, new_bd_body, cand, count=1)
+            if "def _build_description(" in cand:
+                cand = re.sub(old_bd_body_pat, new_bd_body, cand, count=1)
 
-            # 2. Update gateway_help_lines to translate descriptions & alias note
-            for old_ghl in [
-                '        lines.append(f"`/{cmd.name}{args}` -- {cmd.describe()}{alias_note}")',
-                '        lines.append(f"`/{cmd.name}{args}` -- {cmd.description}{alias_note}")',
-            ]:
-                if old_ghl in cand:
-                    new_ghl = '''        alias_note_zh = alias_note.replace("alias:", "别名:") if alias_note else ""
-        desc_val = cmd.describe() if hasattr(cmd, "describe") else cmd.description
-        desc = _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, desc_val)
+            # 4. Modern gateway_help_lines with i18n
+            old_ghl_v2 = '        lines.append(f"`/{cmd.name}{args}` -- {cmd.describe()}{alias_note}")'
+            new_ghl_v2 = '''        alias_note_zh = alias_note.replace("alias:", "别名:") if alias_note else ""
+        lines.append(f"`/{cmd.name}{args}` -- {cmd.describe()}{alias_note_zh}")'''
+            if old_ghl_v2 in cand:
+                cand = cand.replace(old_ghl_v2, new_ghl_v2, 1)
+
+            # 5. Legacy gateway_help_lines
+            old_ghl_v1 = '        lines.append(f"`/{cmd.name}{args}` -- {cmd.description}{alias_note}")'
+            new_ghl_v1 = '''        alias_note_zh = alias_note.replace("alias:", "别名:") if alias_note else ""
+        desc = _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, cmd.description)
         lines.append(f"`/{cmd.name}{args}` -- {desc}{alias_note_zh}")'''
-                    cand = cand.replace(old_ghl, new_ghl, 1)
-
-            # 3. Localize telegram_bot_commands while preserving the current
-            # registry-derived implementation.
-            for old_tg_append in [
-                '            result.append((tg_name, cmd.describe()))',
-                '            result.append((tg_name, cmd.description))',
-            ]:
-                if old_tg_append in cand:
-                    new_tg_append = '''            desc_val = cmd.describe() if hasattr(cmd, "describe") else cmd.description
-            result.append((tg_name, _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, desc_val)))'''
-                    cand = cand.replace(old_tg_append, new_tg_append, 1)
-
-            old_command_append = '            result.append((tg_name, command.description))'
-            new_command_append = '''            result.append(
-                (tg_name, _TELEGRAM_ZH_DESCRIPTIONS.get(command.name, command.description))
-            )'''
-            if old_command_append in cand:
-                cand = cand.replace(old_command_append, new_command_append, 1)
-
-            old_plugin_append = '            result.append((tg_name, description))'
-            new_plugin_append = '            result.append((tg_name, _TELEGRAM_ZH_DESCRIPTIONS.get(name, description)))'
-            if old_plugin_append in cand:
-                cand = cand.replace(old_plugin_append, new_plugin_append, 1)
+            if old_ghl_v1 in cand:
+                cand = cand.replace(old_ghl_v1, new_ghl_v1, 1)
 
             return cand
 
@@ -830,28 +696,20 @@ def format_runtime_footer('''
                     else:
                         cand = cand + "\n\n\n" + zh_dict_block
 
-                for old_p, new_p in [
-                    ("pairs = [(cmd.name, cmd.describe()) for cmd in _gateway_available_commands()]",
-                     "pairs = [(cmd.name, _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, cmd.describe())) for cmd in _gateway_available_commands()]"),
-                    ("pairs = [(cmd.name, cmd.description) for cmd in _gateway_available_commands()]",
-                     "pairs = [(cmd.name, _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, cmd.description)) for cmd in _gateway_available_commands()]"),
-                ]:
-                    if old_p in cand:
-                        cand = cand.replace(old_p, new_p, 1)
+                old_pairs = "pairs = [(cmd.name, cmd.description) for cmd in _gateway_available_commands()]"
+                new_pairs = "pairs = [(cmd.name, _TELEGRAM_ZH_DESCRIPTIONS.get(cmd.name, cmd.description)) for cmd in _gateway_available_commands()]"
+                if old_pairs in cand:
+                    cand = cand.replace(old_pairs, new_pairs, 1)
 
                 old_plugin_pairs = "pairs += [(n, d) for n, d, hint in _iter_plugin_command_entries()"
                 new_plugin_pairs = "pairs += [(n, _TELEGRAM_ZH_DESCRIPTIONS.get(n, d)) for n, d, hint in _iter_plugin_command_entries()"
                 if old_plugin_pairs in cand:
                     cand = cand.replace(old_plugin_pairs, new_plugin_pairs, 1)
 
-                for old_ret, new_ret in [
-                    ("return [(tg, _normalize_telegram_desc(desc)) for name, desc in pairs if (tg := _sanitize_telegram_name(name))]",
-                     "return [(tg, _normalize_telegram_desc(_TELEGRAM_ZH_DESCRIPTIONS.get(name, desc))) for name, desc in pairs if (tg := _sanitize_telegram_name(name))]"),
-                    ("return [(tg, desc) for name, desc in pairs if (tg := _sanitize_telegram_name(name))]",
-                     "return [(tg, _TELEGRAM_ZH_DESCRIPTIONS.get(name, desc)) for name, desc in pairs if (tg := _sanitize_telegram_name(name))]"),
-                ]:
-                    if old_ret in cand:
-                        cand = cand.replace(old_ret, new_ret, 1)
+                old_ret = "return [(tg, desc) for name, desc in pairs if (tg := _sanitize_telegram_name(name))]"
+                new_ret = "return [(tg, _TELEGRAM_ZH_DESCRIPTIONS.get(name, desc)) for name, desc in pairs if (tg := _sanitize_telegram_name(name))]"
+                if old_ret in cand:
+                    cand = cand.replace(old_ret, new_ret, 1)
 
                 return cand
 
@@ -864,58 +722,11 @@ def format_runtime_footer('''
     # Patch 4: State DB Foreign Key & Contention Self-Heal
     # -------------------------------------------------------------
     def patch_state_db(self) -> bool:
-        def transform(src: str) -> str:
-            cand = src
-
-            # 1. State DB contention busy_timeout in apply_database_pragmas
-            if "PRAGMA busy_timeout = 5000" not in cand:
-                pragma_anchor = "def apply_database_pragmas("
-                if pragma_anchor in cand:
-                    p_start = cand.find(pragma_anchor)
-                    doc_end = cand.find('\"\"\"\n    try:', p_start)
-                    if doc_end > p_start:
-                        bt_code = '''\"\"\"\n    try:\n        conn.execute(\"PRAGMA busy_timeout = 5000\")\n    except Exception:\n        pass\n\n    try:'''
-                        cand = cand[:doc_end] + bt_code + cand[doc_end + len('\"\"\"\n    try:'):]
-
-            # 2. FK self-heal in append_message
-            msg_anchor = "def append_message("
-            if msg_anchor in cand and "FK self-heal: ensure the session parent row exists" not in cand:
-                m_start = cand.find(msg_anchor)
-                ins_idx = cand.find('cursor = conn.execute(\n                \"\"\"INSERT INTO messages', m_start)
-                if ins_idx > m_start:
-                    heal_code = '''# FK self-heal: ensure the session parent row exists.
-            try:
-                conn.execute(
-                    \"INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)\",
-                    (session_id, time.time()),
-                )
-            except Exception:
-                pass\n\n            '''
-                    cand = cand[:ins_idx] + heal_code + cand[ins_idx:]
-
-            # 3. FK self-heal in append_messages_batch
-            batch_anchor = "def append_messages_batch("
-            if batch_anchor in cand and "FK batch self-heal" not in cand:
-                b_start = cand.find(batch_anchor)
-                ins_idx = cand.find('inserted, tool_calls_total = self._insert_message_rows(', b_start)
-                if ins_idx > b_start:
-                    heal_batch = '''# FK batch self-heal: ensure session exists
-                try:
-                    conn.execute(
-                        \"INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)\",
-                        (session_id, time.time()),
-                    )
-                except Exception:
-                    pass\n\n                '''
-                    cand = cand[:ins_idx] + heal_batch + cand[ins_idx:]
-
-            return cand
-
-        ok1 = self.apply_file_patch("hermes_state.py", transform, "🛡️ SQLite 外键自愈与防锁表")
-
-        # Upstream modular hermes_state split (hermes_state_wal.py & hermes_state_messages.py)
         wal_file = self.target_dir / "hermes_state_wal.py"
         msg_file = self.target_dir / "hermes_state_messages.py"
+
+        ok_wal = True
+        ok_msg = True
 
         if wal_file.is_file():
             def transform_wal(src: str) -> str:
@@ -928,10 +739,10 @@ def format_runtime_footer('''
                     doc_end = cand.find('"""\n', pos)
                     if doc_end > pos:
                         insert_pos = doc_end + len('"""\n')
-                        bt_code = """    try:\n        conn.execute("PRAGMA busy_timeout = 5000")\n    except Exception:\n        pass\n\n"""
+                        bt_code = """    with contextlib.suppress(Exception):\n        conn.execute("PRAGMA busy_timeout = 5000")\n\n"""
                         cand = cand[:insert_pos] + bt_code + cand[insert_pos:]
                 return cand
-            self.apply_file_patch("hermes_state_wal.py", transform_wal, "🛡️ SQLite WAL Busy Timeout 加固")
+            ok_wal = self.apply_file_patch("hermes_state_wal.py", transform_wal, "🛡️ SQLite WAL Busy Timeout 加固")
 
         if msg_file.is_file():
             def transform_messages(src: str) -> str:
@@ -946,49 +757,93 @@ def format_runtime_footer('''
                     (session_id, time.time()),
                 )
             except Exception:
-                pass\n\n            """
+                pass
+
+            """
                 if ins_target in cand:
                     cand = cand.replace(ins_target, heal_code + ins_target, 1)
 
                 batch_target = "inserted, tool_calls_total = self._insert_message_rows("
-                heal_batch = """# FK batch self-heal: ensure session exists
+                heal_batch = """            # FK batch self-heal: ensure session exists
             try:
                 conn.execute(
                     "INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)",
                     (session_id, time.time()),
                 )
             except Exception:
-                pass\n\n            """
+                pass
+
+            """
                 if batch_target in cand:
                     cand = cand.replace(batch_target, heal_batch + batch_target, 1)
                 return cand
-            self.apply_file_patch("hermes_state_messages.py", transform_messages, "🛡️ SQLite 消息外键自愈加固")
+            ok_msg = self.apply_file_patch("hermes_state_messages.py", transform_messages, "🛡️ SQLite 消息外键自愈加固")
 
-        return ok1
+        # Monolith hermes_state.py fallback
+        def transform(src: str) -> str:
+            cand = src
+            # 1. State DB contention busy_timeout in apply_database_pragmas
+            if "PRAGMA busy_timeout = 5000" not in cand:
+                pragma_anchor = "def apply_database_pragmas("
+                if pragma_anchor in cand:
+                    p_start = cand.find(pragma_anchor)
+                    doc_end = cand.find('"""\n    try:', p_start)
+                    if doc_end > p_start:
+                        bt_code = '''"""\n    try:\n        conn.execute("PRAGMA busy_timeout = 5000")\n    except Exception:\n        pass\n\n    try:'''
+                        cand = cand[:doc_end] + bt_code + cand[doc_end + len('"""\n    try:'):]
+
+            # 2. FK self-heal in append_message
+            msg_anchor = "def append_message("
+            if msg_anchor in cand and "FK self-heal: ensure the session parent row exists" not in cand:
+                m_start = cand.find(msg_anchor)
+                ins_idx = cand.find('cursor = conn.execute(\n                """INSERT INTO messages', m_start)
+                if ins_idx > m_start:
+                    heal_code = '''# FK self-heal: ensure the session parent row exists.\n            try:\n                conn.execute(\n                    "INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)",\n                    (session_id, time.time()),\n                )\n            except Exception:\n                pass\n\n            '''
+                    cand = cand[:ins_idx] + heal_code + cand[ins_idx:]
+
+            # 3. FK self-heal in append_messages_batch
+            batch_anchor = "def append_messages_batch("
+            if batch_anchor in cand and "FK batch self-heal" not in cand:
+                b_start = cand.find(batch_anchor)
+                ins_idx = cand.find('inserted, tool_calls_total = self._insert_message_rows(', b_start)
+                if ins_idx > b_start:
+                    heal_batch = '''# FK batch self-heal: ensure session exists\n                try:\n                    conn.execute(\n                        "INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)",\n                        (session_id, time.time()),\n                    )\n                except Exception:\n                    pass\n\n                '''
+                    cand = cand[:ins_idx] + heal_batch + cand[ins_idx:]
+
+            return cand
+
+        state_file = self.target_dir / "hermes_state.py"
+        if state_file.is_file():
+            state_text = state_file.read_text(encoding="utf-8")
+            if "def apply_database_pragmas(" in state_text or "def append_message(" in state_text:
+                ok_mono = self.apply_file_patch("hermes_state.py", transform, "🛡️ SQLite 外键自愈与防锁表")
+                return ok_mono
+
+        return ok_wal and ok_msg
 
     # -------------------------------------------------------------
     # Patch 5: Tirith Low-Severity Approval Prompt Skip
     # -------------------------------------------------------------
     def patch_approval_tirith(self) -> bool:
+        app_file = self.target_dir / "tools/approval.py"
+        if not app_file.is_file():
+            self.log("⚡ Tirith 低风险扫描审批免打扰", "skipped", "未找到 tools/approval.py")
+            return False
+
+        app_src = app_file.read_text(encoding="utf-8")
+        # Upstream Hermes Agent (v0.21.6+, Config v50) retired the bundled tirith scanner completely.
+        if "tirith" not in app_src and "tirith_result" not in app_src:
+            self.log("⚡ Tirith 低风险免打扰", "unchanged", "上游已退役外部扫描器 (原生免打扰)")
+            return True
+
         def transform(src: str) -> str:
             cand = src
             if "_skip_low_warn" in cand:
                 return cand
 
-            old_check = '''    if tirith_result["action"] in {"block", "warn"}:
-        findings = tirith_result.get("findings") or []
-        rule_id = findings[0].get("rule_id", "unknown") if findings else "unknown"'''
+            old_check = '''    if tirith_result["action"] in {"block", "warn"}:\n        findings = tirith_result.get("findings") or []\n        rule_id = findings[0].get("rule_id", "unknown") if findings else "unknown"'''
 
-            new_check = '''    if tirith_result["action"] in {"block", "warn"}:
-        findings = tirith_result.get("findings") or []
-        _skip_low_warn = (
-            tirith_result.get("action") == "warn"
-            and bool(findings)
-            and all(str(f.get("severity", "")).upper() in {"LOW", "INFO", ""} for f in findings)
-        )
-        if _skip_low_warn:
-            return {"approved": True, "message": None}
-        rule_id = findings[0].get("rule_id", "unknown") if findings else "unknown"'''
+            new_check = '''    if tirith_result["action"] in {"block", "warn"}:\n        findings = tirith_result.get("findings") or []\n        _skip_low_warn = (\n            tirith_result.get("action") == "warn"\n            and bool(findings)\n            and all(str(f.get("severity", "")).upper() in {"LOW", "INFO", ""} for f in findings)\n        )\n        if _skip_low_warn:\n            return {"approved": True, "message": None}\n        rule_id = findings[0].get("rule_id", "unknown") if findings else "unknown"'''
 
             if old_check in cand:
                 cand = cand.replace(old_check, new_check, 1)
@@ -1000,68 +855,31 @@ def format_runtime_footer('''
     # Patch 6: Gateway Streaming Control & Flood Limit Shield
     # -------------------------------------------------------------
     def patch_streaming_control(self) -> bool:
-        def transform(src: str) -> str:
-            cand = src
-            if "_global_display_streaming" in cand:
-                return cand
-
-            old_gate = '''        # Per-platform streaming gate: display.platforms.<plat>.streaming
-        # can disable streaming for specific platforms even when the global
-        # streaming config is enabled.
-        _plat_streaming = ctx.resolve_display_setting(
-            ctx.user_config, platform_key, "streaming"
-        )
-        # None = no per-platform override → follow global config
-        _streaming_enabled = (
-            _scfg.enabled and _scfg.transport != "off"
-            if _plat_streaming is None
-            else bool(_plat_streaming)
-        )'''
-
-            new_gate = '''        # Per-platform streaming gate: display.platforms.<plat>.streaming
-        # can disable streaming for specific platforms even when the global
-        # streaming config is enabled.
-        _plat_streaming = ctx.resolve_display_setting(
-            ctx.user_config, platform_key, "streaming"
-        )
-        # Check global display.streaming setting (hermes-patches stream-shield)
-        _global_display_streaming = None
-        if isinstance(ctx.user_config, dict):
-            _global_display_streaming = (ctx.user_config.get("display") or {}).get("streaming")
-        if _plat_streaming is None and _global_display_streaming is not None:
-            _plat_streaming = bool(_global_display_streaming)
-
-        # None = no per-platform override → follow global config
-        _streaming_enabled = (
-            _scfg.enabled and _scfg.transport != "off"
-            if _plat_streaming is None
-            else bool(_plat_streaming)
-        )'''
-
-            if old_gate in cand:
-                cand = cand.replace(old_gate, new_gate, 1)
-            return cand
-
-        # Modular upstream architecture (run_turn_runner.py)
         if (self.target_dir / "gateway/run_turn_runner.py").is_file():
             def transform_runner(src: str) -> str:
                 cand = src
                 if "_global_display_streaming" in cand:
                     return cand
 
-                anchor = '        plat_streaming = ctx.resolve_display_setting(ctx.user_config, platform_key, "streaming")'
-                inject = '''        plat_streaming = ctx.resolve_display_setting(ctx.user_config, platform_key, "streaming")
-        # Check global display.streaming setting (hermes-patches stream-shield)
-        _global_display_streaming = None
-        if isinstance(ctx.user_config, dict):
-            _global_display_streaming = (ctx.user_config.get("display") or {}).get("streaming")
-        if plat_streaming is None and _global_display_streaming is not None:
-            plat_streaming = bool(_global_display_streaming)'''
+                anchor = 'plat_streaming = ctx.resolve_display_setting(ctx.user_config, platform_key, "streaming")'
+                stream_guard = """        # Check global display.streaming setting (hermes-patches stream-shield)\n        _global_display_streaming = None\n        if isinstance(ctx.user_config, dict):\n            _global_display_streaming = (ctx.user_config.get("display") or {}).get("streaming")\n        if plat_streaming is None and _global_display_streaming is not None:\n            plat_streaming = bool(_global_display_streaming)\n"""
                 if anchor in cand:
-                    cand = cand.replace(anchor, inject, 1)
+                    cand = cand.replace(anchor, anchor + "\n" + stream_guard, 1)
                 return cand
-            ok1 = self.apply_file_patch("gateway/run_turn_runner.py", transform_runner, "🚫 流式控制与 429 护盾 (Runner)")
-            return ok1
+            return self.apply_file_patch("gateway/run_turn_runner.py", transform_runner, "🚫 流式控制与 429 护盾 (Runner)")
+
+        def transform(src: str) -> str:
+            cand = src
+            if "_global_display_streaming" in cand:
+                return cand
+
+            old_gate = '''        # Per-platform streaming gate: display.platforms.<plat>.streaming\n        # can disable streaming for specific platforms even when the global\n        # streaming config is enabled.\n        _plat_streaming = ctx.resolve_display_setting(\n            ctx.user_config, platform_key, "streaming"\n        )\n        # None = no per-platform override → follow global config\n        _streaming_enabled = (\n            _scfg.enabled and _scfg.transport != "off"\n            if _plat_streaming is None\n            else bool(_plat_streaming)\n        )'''
+
+            new_gate = '''        # Per-platform streaming gate: display.platforms.<plat>.streaming\n        # can disable streaming for specific platforms even when the global\n        # streaming config is enabled.\n        _plat_streaming = ctx.resolve_display_setting(\n            ctx.user_config, platform_key, "streaming"\n        )\n        # Check global display.streaming setting (hermes-patches stream-shield)\n        _global_display_streaming = None\n        if isinstance(ctx.user_config, dict):\n            _global_display_streaming = (ctx.user_config.get("display") or {}).get("streaming")\n        if _plat_streaming is None and _global_display_streaming is not None:\n            _plat_streaming = bool(_global_display_streaming)\n\n        # None = no per-platform override → follow global config\n        _streaming_enabled = (\n            _scfg.enabled and _scfg.transport != "off"\n            if _plat_streaming is None\n            else bool(_plat_streaming)\n        )'''
+
+            if old_gate in cand:
+                cand = cand.replace(old_gate, new_gate, 1)
+            return cand
 
         return self.apply_file_patch("gateway/run.py", transform, "🚫 流式控制与 429 护盾")
 
@@ -1069,97 +887,65 @@ def format_runtime_footer('''
     # Patch 7: Deep Thinking & Reasoning Process Cleaner
     # -------------------------------------------------------------
     def patch_clean_thinking(self) -> bool:
+        scrubber_file = self.target_dir / "agent/think_scrubber.py"
+        ok_scrubber = True
+        if scrubber_file.is_file():
+            def transform_scrubber(src: str) -> str:
+                cand = src
+                if "antml:thought" in cand:
+                    return cand
+                anchor = '"思考", "反思", "推理", "推敲",'
+                addition = '\n    "antml:thought", "reflection", "inner_monologue",'
+                if anchor in cand:
+                    cand = cand.replace(anchor, anchor + addition, 1)
+                return cand
+            ok_scrubber = self.apply_file_patch("agent/think_scrubber.py", transform_scrubber, "🧠 思考标签全表面多源净化")
+
+        cli_init_file = self.target_dir / "hermes_cli/cli_init_mixin.py"
+        ok_cli_init = True
+        if cli_init_file.is_file():
+            def transform_cli_init(src: str) -> str:
+                cand = src
+                old_val = 'self.show_reasoning = display.get("show_reasoning", True)'
+                new_val = 'self.show_reasoning = display.get("show_reasoning", False)'
+                if old_val in cand:
+                    cand = cand.replace(old_val, new_val, 1)
+                return cand
+            ok_cli_init = self.apply_file_patch("hermes_cli/cli_init_mixin.py", transform_cli_init, "🧠 CLI 思考过程默认静音")
+
         def transform_cli(src: str) -> str:
             cand = src
-            # Set default CLI show_reasoning to False
             cand = cand.replace(
                 'self.show_reasoning = CLI_CONFIG["display"].get("show_reasoning", True)',
                 'self.show_reasoning = CLI_CONFIG["display"].get("show_reasoning", False)',
             )
-            # Expand OPEN and CLOSE think tags
             cand = re.sub(
-                r'_OPEN_TAGS\s*=\s*\([^\)]+\)',
+                r'_OPEN_TAGS\s*=\s*\([^)]+\)',
                 '_OPEN_TAGS = ("<REASONING_SCRATCHPAD>", "<think>", "<reasoning>", "<THINKING>", "<thinking>", "<thought>", "<antml:thought>", "<reflection>", "<inner_monologue>")',
                 cand,
                 count=1,
             )
             cand = re.sub(
-                r'_CLOSE_TAGS\s*=\s*\([^\)]+\)',
+                r'_CLOSE_TAGS\s*=\s*\([^)]+\)',
                 '_CLOSE_TAGS = ("</REASONING_SCRATCHPAD>", "</think>", "</reasoning>", "</THINKING>", "</thinking>", "</thought>", "</antml:thought>", "</reflection>", "</inner_monologue>")',
                 cand,
                 count=1,
             )
-            if "_OPEN_TAGS = THINK_OPEN_TAGS" in cand:
-                cand = cand.replace(
-                    "_OPEN_TAGS = THINK_OPEN_TAGS",
-                    '_OPEN_TAGS = tuple(dict.fromkeys(THINK_OPEN_TAGS + ("<antml:thought>", "<reflection>", "<inner_monologue>")))'
-                )
-            if "_CLOSE_TAGS = THINK_CLOSE_TAGS" in cand:
-                cand = cand.replace(
-                    "_CLOSE_TAGS = THINK_CLOSE_TAGS",
-                    '_CLOSE_TAGS = tuple(dict.fromkeys(THINK_CLOSE_TAGS + ("</antml:thought>", "</reflection>", "</inner_monologue>")))'
-                )
             return cand
 
         def transform_stream_consumer(src: str) -> str:
             cand = src
-            old_tags = '''    _OPEN_THINK_TAGS = (
-        "<REASONING_SCRATCHPAD>", "<think>", "<reasoning>",
-        "<THINKING>", "<thinking>", "<thought>",
-    )
-    _CLOSE_THINK_TAGS = (
-        "</REASONING_SCRATCHPAD>", "</think>", "</reasoning>",
-        "</THINKING>", "</thinking>", "</thought>",
-    )'''
+            old_tags = '''    _OPEN_THINK_TAGS = (\n        "<REASONING_SCRATCHPAD>", "<think>", "<reasoning>",\n        "<THINKING>", "<thinking>", "<thought>",\n    )\n    _CLOSE_THINK_TAGS = (\n        "</REASONING_SCRATCHPAD>", "</think>", "</reasoning>",\n        "</THINKING>", "</thinking>", "</thought>",\n    )'''
 
-            new_tags = '''    _OPEN_THINK_TAGS = (
-        "<REASONING_SCRATCHPAD>", "<think>", "<reasoning>",
-        "<THINKING>", "<thinking>", "<thought>",
-        "<antml:thought>", "<reflection>", "<inner_monologue>",
-    )
-    _CLOSE_THINK_TAGS = (
-        "</REASONING_SCRATCHPAD>", "</think>", "</reasoning>",
-        "</THINKING>", "</thinking>", "</thought>",
-        "</antml:thought>", "</reflection>", "</inner_monologue>",
-    )'''
+            new_tags = '''    _OPEN_THINK_TAGS = (\n        "<REASONING_SCRATCHPAD>", "<think>", "<reasoning>",\n        "<THINKING>", "<thinking>", "<thought>",\n        "<antml:thought>", "<reflection>", "<inner_monologue>",\n    )\n    _CLOSE_THINK_TAGS = (\n        "</REASONING_SCRATCHPAD>", "</think>", "</reasoning>",\n        "</THINKING>", "</thinking>", "</thought>",\n        "</antml:thought>", "</reflection>", "</inner_monologue>",\n    )'''
             if old_tags in cand:
                 cand = cand.replace(old_tags, new_tags, 1)
-
-            if "_OPEN_THINK_TAGS = THINK_OPEN_TAGS" in cand:
-                cand = cand.replace(
-                    "_OPEN_THINK_TAGS = THINK_OPEN_TAGS",
-                    '_OPEN_THINK_TAGS = tuple(dict.fromkeys(THINK_OPEN_TAGS + ("<antml:thought>", "<reflection>", "<inner_monologue>")))'
-                )
-            if "_CLOSE_THINK_TAGS = THINK_CLOSE_TAGS" in cand:
-                cand = cand.replace(
-                    "_CLOSE_THINK_TAGS = THINK_CLOSE_TAGS",
-                    '_CLOSE_THINK_TAGS = tuple(dict.fromkeys(THINK_CLOSE_TAGS + ("</antml:thought>", "</reflection>", "</inner_monologue>")))'
-                )
             return cand
 
-        ok1 = self.apply_file_patch("cli.py", transform_cli, "🧠 CLI 终端思考过程静音")
-        ok2 = self.apply_file_patch("gateway/stream_consumer.py", transform_stream_consumer, "🧠 Gateway 思考标签深度净化")
+        ok_legacy_cli = self.apply_file_patch("cli.py", transform_cli, "🧠 CLI 终端思考过程静音")
+        ok_legacy_sc = self.apply_file_patch("gateway/stream_consumer.py", transform_stream_consumer, "🧠 Gateway 思考标签深度净化")
 
-        # Upstream modular split for stream & think tags
-        if (self.target_dir / "hermes_cli/cli_stream_mixin.py").is_file():
-            self.apply_file_patch("hermes_cli/cli_stream_mixin.py", transform_cli, "🧠 CLI Stream Mixin 思考标签净化")
-
-        if (self.target_dir / "gateway/stream_consumer_think.py").is_file():
-            self.apply_file_patch("gateway/stream_consumer_think.py", transform_stream_consumer, "🧠 Gateway Stream Think 思考标签净化")
-
-        if (self.target_dir / "agent/think_scrubber.py").is_file():
-            def transform_scrubber(src: str) -> str:
-                cand = src
-                if "antml:thought" in cand:
-                    return cand
-                old_ttn = '    "思考", "反思", "推理", "推敲",'
-                new_ttn = '    "思考", "反思", "推理", "推敲",\n    "antml:thought", "reflection", "inner_monologue",'
-                if old_ttn in cand:
-                    cand = cand.replace(old_ttn, new_ttn, 1)
-                return cand
-            self.apply_file_patch("agent/think_scrubber.py", transform_scrubber, "🧠 Agent 思考标签字典扩展")
-
-        return ok1 and ok2
+        return (ok_scrubber and ok_cli_init) if scrubber_file.is_file() else (ok_legacy_cli and ok_legacy_sc)
 
     # -------------------------------------------------------------
     # Patch 8: Telegram 4096 Safe Long Message Paragraph Chunker
@@ -1355,7 +1141,7 @@ def format_runtime_footer('''
                 elif all(r[1] == "skipped" for r in sub_res) and sub_res:
                     st = "missing"
                     applied = False
-                elif any(r[1] == "unchanged" for r in sub_res):
+                elif any(r[1] in ("applied", "unchanged") for r in sub_res):
                     st = "applied"
                     applied = True
                 else:
