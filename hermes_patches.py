@@ -747,16 +747,16 @@ def build_footer_line(
                     cand = cand.replace(ins_target, heal_code + ins_target, 1)
 
                 batch_target = "inserted, tool_calls_total = self._insert_message_rows("
-                heal_batch = """            # FK batch self-heal: ensure session exists
-            try:
-                conn.execute(
-                    "INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)",
-                    (session_id, time.time()),
-                )
-            except Exception:
-                pass
+                heal_batch = """        # FK batch self-heal: ensure session exists
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)",
+                (session_id, time.time()),
+            )
+        except Exception:
+            pass
 
-            """
+        """
                 if batch_target in cand:
                     cand = cand.replace(batch_target, heal_batch + batch_target, 1)
                 return cand
