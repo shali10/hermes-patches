@@ -429,7 +429,7 @@ def build_footer_line(
 
         def transform_run_turn_runner(src: str) -> str:
             cand = src
-            if '"cache_read_tokens"' not in cand:
+            if "session_cache_read_tokens" not in cand:
                 old_usage = '"output_tokens": getattr(agent, "session_completion_tokens", 0) if has_comp else 0,'
                 new_usage = '"output_tokens": getattr(agent, "session_completion_tokens", 0) if has_comp else 0,\n            "cache_read_tokens": (getattr(agent, "session_cache_read_tokens", 0) or 0) if has_comp else 0,'
                 if old_usage in cand:
