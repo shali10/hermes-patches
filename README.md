@@ -275,16 +275,15 @@ python3 hermes_patches.py --skip menu --auto-config --restart
 
 | 补丁 ID | 别名 (Aliases) | 作用目标 | 说明 |
 |---|---|---|---|
-| `footer` | `runtime-footer`, `token`, `stats` | `gateway/runtime_footer.py`<br>`gateway/run.py` | 渲染 Prompt 总量、缓存命中、输出 Token、耗时与上下文占用 |
-| `table` | `cjk-table`, `telegram-table`, `pipe-table` | `plugins/platforms/telegram/adapter.py` | 绕过桌面端 CJK 拦截检查，放行原生 Markdown 表格 |
-| `menu` | `telegram-menu`, `menu-zh`, `i18n` | `hermes_cli/commands.py` | 汉化 Telegram Bot `/start`, `/new`, `/status`... 命令说明 |
-| `db` | `state-db`, `sqlite`, `durability` | `hermes_state.py` | 注入 `busy_timeout=5000` 与会话外键自动补齐自愈 |
-| `tirith` | `approval`, `security`, `low-warn` | `tools/approval.py` | 自动放行 LOW/INFO 级别低危扫描提示，免除弹窗打扰 |
-| `nostream` | `no-stream`, `quiet-stream`, `stream-shield` | `gateway/run.py` | 修复全局 `display.streaming: false` 生效机制，屏蔽 429 频控 |
-| `clean-think` | `think`, `reasoning`, `suppress-thinking` | `cli.py`<br>`gateway/stream_consumer.py` | 净化思考过程与变体标签，默认静音终端冗长思维链弹框 |
+| `footer` | `runtime-footer`, `token`, `stats` | `gateway/runtime_footer.py`<br>`gateway/run_turn_persistence.py`<br>`gateway/run_turn_runner.py` | 渲染 Prompt 总量、缓存命中、输出 Token、耗时与上下文占用 |
+| `table` ⚠️已退役 | `cjk-table`, `telegram-table`, `pipe-table` | `plugins/platforms/telegram/adapter.py` | **默认不打**。上游 v0.23+ 原生提供 `telegram.extra.allow_cjk_rich_messages` 开关，用配置替代补丁；仅旧版本需要 `--only table` 显式启用 |
+| `menu` | `telegram-menu`, `menu-zh`, `i18n` | `hermes_cli/commands.py`<br>`hermes_cli/commands_platforms.py` | 汉化 Telegram Bot `/start`, `/new`, `/status`... 命令说明与 `/help` |
+| `db` | `state-db`, `sqlite`, `durability` | `hermes_state_wal.py`<br>`hermes_state_messages.py` | 注入 `busy_timeout=5000` 与会话外键自愈（缩进自适应，覆盖全部批量写入调用点） |
+| `clean-think` | `think`, `reasoning`, `suppress-thinking` | `agent/think_scrubber.py`<br>`hermes_cli/cli_init_mixin.py` | 净化思考过程与变体标签（`antml:thought` 等），终端默认静音冗长思维链 |
 | `smart-split` | `split`, `chunking`, `telegram-split` | `gateway/platforms/base.py` | 4096+ 长消息优先在自然段落切分，保护代码块与表格无损 |
 | `terminal-cwd` | `cwd`, `terminal`, `deleted-workdir` | `tools/environments/base.py` | 显式 workdir 被删除后，在构建命令 wrapper 前回退到可用父目录，避免 exit 126 |
-| `state-guard` | `db-guard`, `anti-delete`, `state-db-guard`, `guard` | `tools/approval.py` | 对 live state.db 注入动作级防删护栏，精准拦截 rm/truncate/>/find-delete 误删 |
+| `state-guard` | `db-guard`, `anti-delete`, `state-db-guard`, `guard` | `tools/approval_detection.py` | 对 live state.db 注入动作级防删护栏，精准拦截 rm/truncate/>/find-delete 误删 |
+| `quote-blocks` | `quote`, `blockquote`, `expandable-quote` | `plugins/platforms/telegram/telegram_markdown.py` | 引用块整块渲染：块内空行不破块、`>无空格` 也能识别、末行 `\|\|` 折叠标记正确落位（v0.23 起 markdown 转换独立成模块） |
 
 ---
 

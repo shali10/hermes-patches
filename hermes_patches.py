@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 import json
 
-__version__ = "1.8.0"
+__version__ = "1.9.0"
 
 
 PATCH_REGISTRY = [
@@ -40,9 +40,10 @@ PATCH_REGISTRY = [
         "id": "table",
         "num": 3,
         "aliases": ["cjk-table", "telegram-table", "telegram-rich", "pipe-table", "3", "patch-3"],
-        "name": "📑 Telegram CJK 原生 Markdown 表格放行",
+        "name": "📑 Telegram CJK 原生 Markdown 表格放行 (已被上游开关取代)",
         "method": "patch_telegram_cjk_rich",
-        "description": "绕过桌面端 CJK 字符乱码检测，100% 允许 Telegram 客户端原生高保真表格渲染。",
+        "description": "上游 v0.23+ 已提供 telegram.extra.allow_cjk_rich_messages 开关，优先用配置；本补丁仅作旧版本兼容，默认不启用（--only table 才打）。",
+        "default_off": True,
     },
     {
         "id": "menu",
@@ -91,6 +92,14 @@ PATCH_REGISTRY = [
         "name": "🧱 SQLite 主库防误删护栏 (State DB Anti-Destruction Guard)",
         "method": "patch_state_db_guard",
         "description": "对 live state.db 注入动作级防删护栏，精准拦截 rm/truncate/>/find-delete 误删，免除全量丢失风险。",
+    },
+    {
+        "id": "quote-blocks",
+        "num": 10,
+        "aliases": ["quote", "blockquote", "expandable-quote", "mdv2-quote", "10", "patch-10"],
+        "name": "💬 Telegram 引用块整块渲染 (空行/无空格/末行折叠标记)",
+        "method": "patch_telegram_quote_blocks",
+        "description": "v0.23 起引用块转换迁到 telegram_markdown.py：本补丁让连续引用按块处理，支持 >无空格、块内空行与末行 || 折叠标记。",
     },
 ]
 
@@ -410,7 +419,7 @@ def build_footer_line(
 
         def transform_run_turn(src: str) -> str:
             cand = src
-            if "prompt_tokens=agent_result.get" in cand:
+            if "cache_read_tokens=agent_result.get" in cand:
                 return cand
             old_call = '''                cwd=_terminal_scope_cwd(""), turn_seconds=_turn_seconds,
                 requested_model=agent_result.get("requested_model"),
@@ -429,11 +438,12 @@ def build_footer_line(
 
         def transform_run_turn_runner(src: str) -> str:
             cand = src
-            if "session_cache_read_tokens" not in cand:
-                old_usage = '"output_tokens": getattr(agent, "session_completion_tokens", 0) if has_comp else 0,'
-                new_usage = '"output_tokens": getattr(agent, "session_completion_tokens", 0) if has_comp else 0,\n            "cache_read_tokens": (getattr(agent, "session_cache_read_tokens", 0) or 0) if has_comp else 0,'
-                if old_usage in cand:
-                    cand = cand.replace(old_usage, new_usage, 1)
+            if '"cache_read_tokens": (getattr(agent' in cand:
+                return cand
+            old_usage = '"output_tokens": getattr(agent, "session_completion_tokens", 0) if has_comp else 0,'
+            new_usage = '"output_tokens": getattr(agent, "session_completion_tokens", 0) if has_comp else 0,\n            "cache_read_tokens": (getattr(agent, "session_cache_read_tokens", 0) or 0) if has_comp else 0,'
+            if old_usage in cand:
+                cand = cand.replace(old_usage, new_usage, 1)
             return cand
 
         def transform_usage_pricing(src: str) -> str:
@@ -470,8 +480,9 @@ def build_footer_line(
 
         ok1 = self.apply_file_patch("gateway/runtime_footer.py", transform_footer, "📊 Runtime Footer 全量计量")
         ok2 = self.apply_file_patch("gateway/run.py", transform_gateway_run, "⚙️ Gateway 运行态参数注入")
-        if (self.target_dir / "gateway/run_turn.py").is_file():
-            self.apply_file_patch("gateway/run_turn.py", transform_run_turn, "⚙️ RunTurn 页脚参数注入")
+        for _rel in ("gateway/run_turn.py", "gateway/run_turn_persistence.py"):
+            if (self.target_dir / _rel).is_file():
+                self.apply_file_patch(_rel, transform_run_turn, "⚙️ RunTurn 页脚参数注入")
         if (self.target_dir / "gateway/run_turn_runner.py").is_file():
             self.apply_file_patch("gateway/run_turn_runner.py", transform_run_turn_runner, "⚙️ Runner 缓存 Token 计量传递")
         ok3 = self.apply_file_patch("agent/usage_pricing.py", transform_usage_pricing, "🧠 多模型厂商全字段缓存解析")
@@ -732,34 +743,33 @@ def build_footer_line(
                 cand = src
                 if "FK self-heal" in cand:
                     return cand
-                ins_target = "msg_id = conn.execute(_INSERT_MESSAGE_SQL, params).lastrowid"
-                heal_code = """            # FK self-heal: ensure the session parent row exists
-            try:
-                conn.execute(
-                    "INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)",
-                    (session_id, time.time()),
+
+                heal_tpl = (
+                    "{ind}# FK self-heal: ensure the session parent row exists\n"
+                    "{ind}try:\n"
+                    "{ind}    conn.execute(\n"
+                    "{ind}        \"INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)\",\n"
+                    "{ind}        (session_id, time.time()),\n"
+                    "{ind}    )\n"
+                    "{ind}except Exception:\n"
+                    "{ind}    pass"
                 )
-            except Exception:
-                pass
 
-            """
-                if ins_target in cand:
-                    cand = cand.replace(ins_target, heal_code + ins_target, 1)
+                def _indent_of(line: str) -> str:
+                    return line[: len(line) - len(line.lstrip(" \t"))]
 
-                batch_target = "inserted, tool_calls_total = self._insert_message_rows("
-                heal_batch = """        # FK batch self-heal: ensure session exists
-        try:
-            conn.execute(
-                "INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)",
-                (session_id, time.time()),
-            )
-        except Exception:
-            pass
+                # 缩进自适应：上游重构会改变锚点行缩进层级，硬编码 12 空格会炸 IndentationError。
+                # 单条插入锚点
+                single_anchor = "msg_id = conn.execute(_INSERT_MESSAGE_SQL, params).lastrowid"
+                # 批量插入锚点（v0.23 起有 3 处调用点）
+                batch_anchor = "self._insert_message_rows(conn, session_id, "
 
-        """
-                if batch_target in cand:
-                    cand = cand.replace(batch_target, heal_batch + batch_target, 1)
-                return cand
+                out_lines = []
+                for line in cand.split("\n"):
+                    if single_anchor in line or batch_anchor in line:
+                        out_lines.append(heal_tpl.format(ind=_indent_of(line)))
+                    out_lines.append(line)
+                return "\n".join(out_lines)
             ok_msg = self.apply_file_patch("hermes_state_messages.py", transform_messages, "🛡️ SQLite 消息外键自愈加固")
 
         # Monolith hermes_state.py fallback
@@ -988,6 +998,76 @@ def build_footer_line(
         )
 
     # -------------------------------------------------------------
+    # Patch 10: Telegram quote blocks (v0.23 telegram_markdown.py)
+    # -------------------------------------------------------------
+    def patch_telegram_quote_blocks(self) -> bool:
+        md_rel = "plugins/platforms/telegram/telegram_markdown.py"
+
+        shield_old = r"    text = re.sub(r'(?m)^\*\*(?=>{1,3} )', _EXPANDABLE_QUOTE, text)"
+        shield_new = (
+            r"    text = re.sub(r'(?m)^\*\*(>[^\n]*)$'," + "\n"
+            r"                  lambda m: m.group(0) if m.group(1).count('**') % 2 else _EXPANDABLE_QUOTE + m.group(1), text)"
+        )
+
+        consts_old = r"_MDV2_ESCAPE_RE = re.compile(r'([_*\[\]()~`>#\+\-=|{}.!\\])')"
+        consts_new = consts_old + "\n" + r'''
+# hermes-patches quote-blocks: a quotation is a run of consecutive quoted lines; the converter has to
+# see the run as one block (Telegram renders it as one entity). Space after the marker is optional.
+_QUOTE_LINE = rf'(?:{_EXPANDABLE_QUOTE})?>{{1,3}} ?[^\n]*'
+_QUOTE_LINE_RE = re.compile(rf'^((?:{_EXPANDABLE_QUOTE})?>{{1,3}}) ?([^\n]*)$')
+_QUOTE_BLOCK_RE = re.compile(rf'^(?:{_QUOTE_LINE})(?:\n{_QUOTE_LINE})*$', re.MULTILINE)'''
+
+        block_new = r'''    # 9) Blockquotes: the whole run of quoted lines is converted as ONE block. Telegram ends a quote at
+    # a non-quote line, so an empty quoted line (a bare '>') stays inside the run, a '>text' line counts,
+    # and the expandable end marker '||' is recognised on the LAST line — where Telegram expects it.
+    def _convert_blockquote(m):
+        parsed = [_QUOTE_LINE_RE.match(line) for line in m.group(0).split('\n')]
+        prefixes = [p.group(1).replace(_EXPANDABLE_QUOTE, '') for p in parsed]
+        contents = [p.group(2) for p in parsed]
+        if not any(contents):
+            return m.group(0).replace(_EXPANDABLE_QUOTE, '**')
+        expandable = _EXPANDABLE_QUOTE in m.group(0)
+        tail = contents[-1].rstrip()
+        if tail.endswith('||'):
+            contents[-1] = tail[:-2]
+            expandable = True
+        rendered = '\n'.join(
+            f'{p} {_escape_mdv2(c)}' if c else p
+            for p, c in zip(prefixes, contents))
+        if expandable:
+            rendered = f'**{rendered}||'
+        return _ph(rendered)
+
+    text = re.sub(_QUOTE_BLOCK_RE, _convert_blockquote, text)'''
+
+        def transform(src: str) -> str:
+            cand = src
+            if "_QUOTE_BLOCK_RE" in cand:
+                return cand
+
+            if consts_old in cand:
+                cand = cand.replace(consts_old, consts_new, 1)
+            if shield_old in cand:
+                cand = cand.replace(shield_old, shield_new, 1)
+
+            lines = cand.split("\n")
+            start = next((i for i, ln in enumerate(lines) if "def _convert_blockquote(m):" in ln), -1)
+            end = next((i for i, ln in enumerate(lines)
+                        if i > start and "flags=re.MULTILINE)" in ln), -1)
+            if start >= 0 and end > start:
+                # 回退到 _convert_blockquote 上方的注释行，整段替换
+                while start > 0 and lines[start - 1].lstrip().startswith("#"):
+                    start -= 1
+                lines[start:end + 1] = block_new.split("\n")
+                cand = "\n".join(lines)
+            return cand
+
+        target = self.target_dir / md_rel
+        if not target.is_file():
+            return False
+        return self.apply_file_patch(md_rel, transform, "💬 Telegram 引用块整块渲染")
+
+    # -------------------------------------------------------------
     # Execution Filter & Dispatch
     # -------------------------------------------------------------
     def _is_patch_selected(self, patch_meta: dict) -> bool:
@@ -1001,6 +1081,10 @@ def build_footer_line(
         # Check only
         if self.only_set is not None:
             return any(name in self.only_set for name in names)
+
+        # 已被上游原生能力取代的补丁：默认不打，需 --only 显式指定
+        if patch_meta.get("default_off"):
+            return False
 
         return True
 

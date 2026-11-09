@@ -5,6 +5,32 @@
 
 ---
 
+## [v1.9.0] - 2026-11-09
+
+### 🏛️ 适配上游 v0.23.0（The Hearth Release）与引用块补丁补齐
+
+- **页脚注入点随上游搬迁 (run_turn → run_turn_persistence)**：
+  - v0.23 把 `_hmwa_runtime_footer_line` 的 `build_footer_line` 调用从 `gateway/run_turn.py` 搬到 `gateway/run_turn_persistence.py`；
+  - 旧补丁只认 `run_turn.py`，锚点打空后仅报 `UNCHANGED` 不报错，结果是页脚只剩模型与耗时；
+  - 现已对两个候选文件同时注入，`prompt_tokens` / `output_tokens` / `cache_read_tokens` 恢复传递。
+- **幂等判据误命中修复**：
+  - `"prompt_tokens=agent_result.get"` 会被 `last_prompt_tokens=agent_result.get(` 命中，导致补丁误判"已应用"而跳过；
+  - 判据收紧为 `cache_read_tokens=agent_result.get`；`run_turn_runner` 的 `cache_read_tokens` 判据同样改为锚定赋值右侧。
+- **外键自愈缩进自适应 (hermes_state_messages.py)**：
+  - v0.23 把 `_insert_message_rows` 调用点从 12 空格降到 8 空格，写死缩进直接 `IndentationError`；
+  - 改为从锚点行现采缩进，并覆盖单条 + 全部 3 处批量写入调用点。
+- **新增 `quote-blocks` 补丁（编号 10）**：
+  - v0.23 将 Telegram markdown 转换拆到 `plugins/platforms/telegram/telegram_markdown.py`；
+  - 上游实现仍有三处缺陷：块内空行被转义、末行 `||` 被转义、`>无空格` 不识别；
+  - 本补丁整块替换引用块转换逻辑，保持折叠引用与多行引用结构完整。
+- **`table` 补丁退役 (default_off)**：
+  - 上游 v0.23+ 原生提供 `telegram.extra.allow_cjk_rich_messages` 开关；
+  - 补丁标记 `default_off`，默认不打，仅旧版本用 `--only table` 显式启用；
+  - 新增 `_is_patch_selected` 对 `default_off` 的处理，状态面板照常显示"未应用"。
+- **测试矩阵更新**：行为断言覆盖 registry 9 项 / 实打 8 项、引用块渲染三用例（块内空行、末行折叠、无空格引用）。
+
+---
+
 ## [v1.8.0] - 2026-10-11
 
 ### 🧹 冗余补丁退役瘦身与架构精简 (Tirith & Streaming-Shield Retirement)

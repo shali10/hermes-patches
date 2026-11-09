@@ -105,13 +105,20 @@ def main():
     assert "📤 输出: 500" in line, f"Missing output tokens: {line}"
 
     # -------------------------------------------------------------
-    # 2. Telegram CJK Table Bypass
+    # 2. Telegram CJK rich (v1.9.0: 上游 allow_cjk_rich_messages 开关优先，补丁默认退役)
     # -------------------------------------------------------------
-    print("Testing 2/8: Telegram CJK Table Bypass...")
+    print("Testing 2/10: Telegram CJK rich (upstream switch)...")
     from plugins.platforms.telegram.adapter import TelegramAdapter
     adapter = TelegramAdapter.__new__(TelegramAdapter)
     table_sample = "测试表格\n| a | b |\n|---|---|\n| 1 | 2 |"
-    assert adapter._has_telegram_desktop_cjk_rich_garble_shape(table_sample) is False
+    garble_doc = TelegramAdapter._has_telegram_desktop_cjk_rich_garble_shape.__doc__ or ""
+    if "Allow Telegram CJK rich formatting" in garble_doc:
+        # 旧版本兼容模式（--only table 打过补丁）：强制放行
+        assert adapter._has_telegram_desktop_cjk_rich_garble_shape(table_sample) is False
+    else:
+        # v0.23+：由 telegram.extra.allow_cjk_rich_messages 控制，补丁不打
+        adapter_src = (target_dir / "plugins/platforms/telegram/adapter.py").read_text(encoding="utf-8")
+        assert "_allow_cjk_rich_messages" in adapter_src, " upstream CJK switch missing"
     assert adapter._needs_rich_rendering(table_sample) is True
 
     # -------------------------------------------------------------
@@ -218,7 +225,7 @@ def main():
     # -------------------------------------------------------------
     # 11. Multi-selection Token Expansion & Status Probing (v1.6.0)
     # -------------------------------------------------------------
-    print("Testing 9/10: Multi-selection Expansion & Status Probing...")
+    print("Testing 9/11: Multi-selection Expansion & Status Probing...")
     repo_root = Path(__file__).resolve().parent.parent
     sys.path.insert(0, str(repo_root))
     import hermes_patches
@@ -232,13 +239,32 @@ def main():
     # Test check_all_statuses against target_dir
     engine = hermes_patches.PatchEngine(target_dir=target_dir, dry_run=True, verbose=False)
     statuses = engine.check_all_statuses()
-    assert len(statuses) == 8, f"Expected 8 patches, got {len(statuses)}"
-    assert all(s["applied"] for s in statuses), "Target directory should have all 8 patches applied"
+    # v1.9.0: registry 9 项，其中 table 默认退役（default_off），实际打 8 项
+    assert len(statuses) == 9, f"Expected 9 registry entries, got {len(statuses)}"
+    applied = [s for s in statuses if s["applied"]]
+    assert len(applied) == 8, f"Expected 8 applied patches, got {len(applied)}: {[s['id'] for s in statuses if not s['applied']]}"
+
+    # -------------------------------------------------------------
+    # 10. Telegram quote blocks (v1.9.0 新增)
+    # -------------------------------------------------------------
+    print("Testing 10/11: Telegram quote blocks...")
+    md_file = target_dir / "plugins/platforms/telegram/telegram_markdown.py"
+    if md_file.is_file():
+        assert "_QUOTE_BLOCK_RE" in md_file.read_text(encoding="utf-8"), "quote-blocks patch missing"
+        from plugins.platforms.telegram.telegram_markdown import to_markdown_v2
+        # 块内空行 + 末行折叠标记必须保持引用块完整
+        out = to_markdown_v2("**> 折叠一\n> 二\n>\n> 末||")
+        assert out.startswith("**> ") and out.rstrip().endswith("||"), f"expandable quote broken: {out!r}"
+        assert "\\>" not in out, f"quote marker wrongly escaped: {out!r}"
+        out2 = to_markdown_v2(">无空格引用")
+        assert not out2.startswith("\\>"), f"no-space quote not recognized: {out2!r}"
+    else:
+        print("  (skipped: telegram_markdown.py absent on this upstream version)")
 
     # -------------------------------------------------------------
     # 12. Interactive Console Main Loop & Session Flow (v1.6.1)
     # -------------------------------------------------------------
-    print("Testing 10/10: Interactive Console Main Loop & Session Flow...")
+    print("Testing 11/11: Interactive Console Main Loop & Session Flow...")
     from unittest.mock import patch as mock_patch
 
     # Test 12a: Option 0 directly exits
