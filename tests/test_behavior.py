@@ -226,12 +226,13 @@ def main():
     import hermes_patches
 
     # Test token expansion
-    assert hermes_patches.expand_selection_tokens(["2", "3"]) == {"footer", "menu"}
-    assert hermes_patches.expand_selection_tokens(["9"]) == {"quote-blocks"}
-    assert hermes_patches.expand_selection_tokens(["patch-4"]) == {"db"}
-    assert hermes_patches.expand_selection_tokens(["2,3,7"]) == {"footer", "menu", "terminal-cwd"}
-    assert hermes_patches.expand_selection_tokens(["2-5"]) == {"footer", "menu", "db", "clean-think"}
-    assert hermes_patches.expand_selection_tokens(["2~4, 9"]) == {"footer", "menu", "db", "quote-blocks"}
+    assert hermes_patches.expand_selection_tokens(["1", "2"]) == {"footer", "menu"}
+    assert hermes_patches.expand_selection_tokens(["8"]) == {"quote-blocks"}
+    assert hermes_patches.expand_selection_tokens(["all"]) == {p["id"] for p in hermes_patches.PATCH_REGISTRY}
+    assert hermes_patches.expand_selection_tokens(["patch-4"]) == {"clean-think"}
+    assert hermes_patches.expand_selection_tokens(["1,2,6"]) == {"footer", "menu", "terminal-cwd"}
+    assert hermes_patches.expand_selection_tokens(["1-4"]) == {"footer", "menu", "db", "clean-think"}
+    assert hermes_patches.expand_selection_tokens(["1~3, 8"]) == {"footer", "menu", "db", "quote-blocks"}
 
     # Test check_all_statuses against target_dir
     engine = hermes_patches.PatchEngine(target_dir=target_dir, dry_run=True, verbose=False)
@@ -239,7 +240,7 @@ def main():
     # v1.9.2: CJK 补丁已删除，registry 只剩 8 项，全部必须已应用
     assert len(statuses) == 8, f"Expected 8 registered patches, got {len(statuses)}"
     assert all(s["applied"] for s in statuses), f"Unapplied: {[s['id'] for s in statuses if not s['applied']]}"
-    assert [s["num"] for s in statuses] == list(range(2, 10)), f"Numbering broken: {[s['num'] for s in statuses]}"
+    assert [s["num"] for s in statuses] == list(range(1, 9)), f"Numbering broken: {[s['num'] for s in statuses]}"
 
     # -------------------------------------------------------------
     # 10. Telegram quote blocks (v1.9.0 新增)

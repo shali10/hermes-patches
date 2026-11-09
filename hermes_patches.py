@@ -24,13 +24,13 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 import json
 
-__version__ = "1.9.2"
+__version__ = "1.9.3"
 
 
 PATCH_REGISTRY = [
     {
         "id": "footer",
-        "num": 2,
+        "num": 1,
         "aliases": ["runtime-footer", "token", "tokens", "stats"],
         "name": "📊 Runtime Footer (Token全量计量/缓存命中/耗时)",
         "method": "patch_runtime_footer",
@@ -38,7 +38,7 @@ PATCH_REGISTRY = [
     },
     {
         "id": "menu",
-        "num": 3,
+        "num": 2,
         "aliases": ["telegram-menu", "menu-zh", "help-zh", "i18n", "localization"],
         "name": "🇨🇳 Telegram 快捷菜单与 /help /commands 全中文汉化",
         "method": "patch_telegram_menu_zh",
@@ -46,7 +46,7 @@ PATCH_REGISTRY = [
     },
     {
         "id": "db",
-        "num": 4,
+        "num": 3,
         "aliases": ["state-db", "sqlite", "durability", "concurrency"],
         "name": "🛡️ SQLite 生产级外键自愈与高并发防锁死",
         "method": "patch_state_db",
@@ -54,7 +54,7 @@ PATCH_REGISTRY = [
     },
     {
         "id": "clean-think",
-        "num": 5,
+        "num": 4,
         "aliases": ["think", "reasoning", "clean-reasoning", "suppress-thinking"],
         "name": "🧠 全链路深度思考过程强力净化",
         "method": "patch_clean_thinking",
@@ -62,7 +62,7 @@ PATCH_REGISTRY = [
     },
     {
         "id": "smart-split",
-        "num": 6,
+        "num": 5,
         "aliases": ["split", "telegram-split", "chunking", "message-chunker"],
         "name": "✂️ Telegram 4096 长消息智能段落切分",
         "method": "patch_smart_split",
@@ -70,7 +70,7 @@ PATCH_REGISTRY = [
     },
     {
         "id": "terminal-cwd",
-        "num": 7,
+        "num": 6,
         "aliases": ["cwd", "terminal", "deleted-workdir", "cwd-recovery"],
         "name": "📁 Terminal 失效工作目录自动回退",
         "method": "patch_terminal_cwd_recovery",
@@ -78,7 +78,7 @@ PATCH_REGISTRY = [
     },
     {
         "id": "state-guard",
-        "num": 8,
+        "num": 7,
         "aliases": ["db-guard", "anti-delete", "state-db-guard", "guard"],
         "name": "🧱 SQLite 主库防误删护栏 (State DB Anti-Destruction Guard)",
         "method": "patch_state_db_guard",
@@ -86,7 +86,7 @@ PATCH_REGISTRY = [
     },
     {
         "id": "quote-blocks",
-        "num": 9,
+        "num": 8,
         "aliases": ["quote", "blockquote", "expandable-quote", "mdv2-quote"],
         "name": "💬 Telegram 引用块整块渲染 (空行/无空格/末行折叠标记)",
         "method": "patch_telegram_quote_blocks",
@@ -106,6 +106,10 @@ def expand_selection_tokens(tokens: Optional[Iterable[str]]) -> Optional[Set[str
     """
     if tokens is None:
         return None
+
+    token_list = [str(t).strip().lower() for t in tokens]
+    if token_list and all(t in ("all", "a", "*") for t in token_list):
+        return {item["id"].lower() for item in PATCH_REGISTRY}
 
     num_to_id = {item.get("num", i + 2): item["id"] for i, item in enumerate(PATCH_REGISTRY)}
     alias_to_id: Dict[str, str] = {}
@@ -257,7 +261,7 @@ class PatchEngine:
             return False
 
     # -------------------------------------------------------------
-    # Patch 2: Runtime Footer Full Tokens & Latency
+    # Patch 1: Runtime Footer Full Tokens & Latency
     # -------------------------------------------------------------
     def patch_runtime_footer(self) -> bool:
         def transform_footer(src: str) -> str:
@@ -485,7 +489,7 @@ def build_footer_line(
         return ok1 and ok2 and ok3
 
     # -------------------------------------------------------------
-    # Patch 3: Telegram Menu & /help /commands Full Chinese Localization
+    # Patch 2: Telegram Menu & /help /commands Full Chinese Localization
     # -------------------------------------------------------------
     def patch_telegram_menu_zh(self) -> bool:
         zh_dict_block = '''_TELEGRAM_ZH_DESCRIPTIONS: dict[str, str] = {
@@ -686,7 +690,7 @@ def build_footer_line(
         return ok1
 
     # -------------------------------------------------------------
-    # Patch 4: State DB Foreign Key & Contention Self-Heal
+    # Patch 3: State DB Foreign Key & Contention Self-Heal
     # -------------------------------------------------------------
     def patch_state_db(self) -> bool:
         wal_file = self.target_dir / "hermes_state_wal.py"
@@ -788,7 +792,7 @@ def build_footer_line(
         return ok_wal and ok_msg
 
     # -------------------------------------------------------------
-    # Patch 5: Deep Thinking & Reasoning Process Cleaner
+    # Patch 4: Deep Thinking & Reasoning Process Cleaner
     # -------------------------------------------------------------
     def patch_clean_thinking(self) -> bool:
         scrubber_file = self.target_dir / "agent/think_scrubber.py"
@@ -852,7 +856,7 @@ def build_footer_line(
         return (ok_scrubber and ok_cli_init) if scrubber_file.is_file() else (ok_legacy_cli and ok_legacy_sc)
 
     # -------------------------------------------------------------
-    # Patch 6: Telegram 4096 Safe Long Message Paragraph Chunker
+    # Patch 5: Telegram 4096 Safe Long Message Paragraph Chunker
     # -------------------------------------------------------------
     def patch_smart_split(self) -> bool:
         def transform_base_platform(src: str) -> str:
@@ -873,7 +877,7 @@ def build_footer_line(
         return self.apply_file_patch("gateway/platforms/base.py", transform_base_platform, "✂️ Telegram 4096 智能段落切分")
 
     # -------------------------------------------------------------
-    # Patch 7: Local terminal explicit cwd recovery
+    # Patch 6: Local terminal explicit cwd recovery
     # -------------------------------------------------------------
     def patch_terminal_cwd_recovery(self) -> bool:
         def transform_base_env(src: str) -> str:
@@ -918,7 +922,7 @@ def build_footer_line(
         )
 
     # -------------------------------------------------------------
-    # Patch 8: State DB Anti-Destruction Guard
+    # Patch 7: State DB Anti-Destruction Guard
     # -------------------------------------------------------------
     def patch_state_db_guard(self) -> bool:
         def transform_approval(src: str) -> str:
@@ -971,7 +975,7 @@ def build_footer_line(
         )
 
     # -------------------------------------------------------------
-    # Patch 9: Telegram quote blocks (v0.23 telegram_markdown.py)
+    # Patch 8: Telegram quote blocks (v0.23 telegram_markdown.py)
     # -------------------------------------------------------------
     def patch_telegram_quote_blocks(self) -> bool:
         md_rel = "plugins/platforms/telegram/telegram_markdown.py"
@@ -1479,40 +1483,40 @@ def run_interactive_cli(target: Path):
         status_map = {s["num"]: s for s in statuses}
 
         print(f"{C_BOLD}{C_CYAN}====================================================={C_RESET}")
-        print(f"{C_BOLD}{C_BLUE}   🛠️  Hermes Agent 体验增强补丁管理套件 (v1.6.1)   {C_RESET}")
+        print(f"{C_BOLD}{C_BLUE}   🛠️  Hermes Agent 体验增强补丁管理套件 (v{__version__})   {C_RESET}")
         print(f"{C_BOLD}{C_CYAN}====================================================={C_RESET}")
         print(f" 目标路径: {C_GREEN}{target}{C_RESET}  {C_BOLD}(补丁状态: {C_GREEN}{applied_cnt}{C_RESET}/{total_cnt} 已应用){C_RESET}\n")
-        print(f" {C_BOLD}{C_GREEN}[1]  🚀 全量一键安装、自动配置并平滑重启 (推荐 / 直接回车){C_RESET}")
+        print(f" {C_BOLD}{C_GREEN}[A]  🚀 全量一键安装、自动配置并平滑重启 (推荐 / 直接回车){C_RESET}")
         print(" ---------------------------------------------------")
         for s in statuses:
             tag = f"{C_GREEN}[已应用 ✓]{C_RESET}" if s["applied"] else f"{C_YELLOW}[未应用 -]{C_RESET}"
             print(f" [{s['num']:>2}]  {tag}  {s['name']}")
         print(" ---------------------------------------------------")
-        print(" [12] 🔍 预览变更 (Dry Run，不写入磁盘)")
+        print(" [P]  🔍 预览变更 (Dry Run，不写入磁盘)")
         print(" [0]  🚪 退出脚本")
         print(f"{C_BOLD}{C_CYAN}====================================================={C_RESET}")
 
         try:
-            choice = input("\n请输入选项编号 (直接多选如 2 3 7、2,3,7 或 2-5) [默认: 1]: ").strip()
+            choice = input("\n请输入选项编号 (1-8，多选如 1 3 5、1,3,5 或 1-4；A=全量) [默认: A]: ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\n已退出。")
             break
 
         if not choice:
-            choice = "1"
+            choice = "A"
 
         if choice in ("0", "q", "Q", "exit"):
             print("已退出操作。")
             break
 
-        if choice == "1":
+        if choice in ("A", "a", "all", "ALL"):
             print("\n🚀 正在全量应用所有增强补丁、自动配置并平滑重启...")
             exec_engine = PatchEngine(target_dir=target, dry_run=False, verbose=True)
             exec_engine.run_all()
             ensure_runtime_config(dry_run=False)
             restart_gateway_services(target_dir=target)
             print(f"\n{C_BOLD}{C_GREEN}🎉 全量补丁已全部处理完毕并生效！{C_RESET}\n")
-        elif choice == "12":
+        elif choice in ("P", "p", "preview", "dry", "dry-run"):
             print("\n🔍 正在执行 Dry-Run 预检分析...")
             exec_engine = PatchEngine(target_dir=target, dry_run=True, verbose=True)
             exec_engine.run_all()
@@ -1568,11 +1572,11 @@ def main():
   # 预览变更而不写入磁盘 (Dry Run)
   python3 hermes_patches.py --dry-run -v
 
-  # 仅应用特定补丁 (支持补丁名或编号/范围，如 2 3 7 或 2-5)
-  python3 hermes_patches.py --only 2 3 7 clean-think
+  # 仅应用特定补丁 (支持补丁名或编号/范围，如 1 3 5 或 1-4)
+  python3 hermes_patches.py --only 1 3 5 clean-think
 
   # 跳过特定补丁模块
-  python3 hermes_patches.py --skip menu tirith
+  python3 hermes_patches.py --skip menu state-guard
         """,
     )
     parser.add_argument(

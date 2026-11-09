@@ -261,8 +261,8 @@ python3 hermes_patches.py --status --json
 python3 hermes_patches.py --dry-run -v
 
 # 3. 仅应用特定补丁（支持补丁名称、数字编号与范围，如 2 3 7 或 2-5）并自动配置重启
-python3 hermes_patches.py --only 2 3 7 --auto-config --restart
-python3 hermes_patches.py --only 2-5 nostream --auto-config --restart
+python3 hermes_patches.py --only 1 3 5 --auto-config --restart
+python3 hermes_patches.py --only 2-5 state-guard --auto-config --restart
 
 # 4. 跳过特定补丁模块
 python3 hermes_patches.py --skip menu --auto-config --restart
@@ -284,7 +284,7 @@ python3 hermes_patches.py --skip menu --auto-config --restart
 | `state-guard` | `db-guard`, `anti-delete`, `state-db-guard` | `tools/approval_detection.py` | 对 live state.db 注入动作级防删护栏，精准拦截 rm/truncate/>/find-delete 误删 |
 | `quote-blocks` | `quote`, `blockquote`, `expandable-quote` | `plugins/platforms/telegram/telegram_markdown.py` | 引用块整块渲染：块内空行不破块、`>无空格` 也能识别、末行 `\|\|` 折叠标记正确落位 |
 
-> 编号即 `--only` / `--skip` 可用的序号（2–9）。菜单项 `[1]` 保留给"全量安装"，所以编号从 2 起。
+> 编号即 `--only` / `--skip` 可用的序号（1–8，与交互菜单一致）。交互菜单里全量安装是 `[A]`（回车默认），预览是 `[P]`。
 > v1.9.2 起已删除 CJK 表格补丁：上游 v0.23+ 请直接用 `telegram.extra.allow_cjk_rich_messages: true`；旧版本可 checkout `v1.9.1` 标签取用该补丁。
 
 ---
