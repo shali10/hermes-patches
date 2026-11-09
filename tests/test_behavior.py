@@ -239,10 +239,12 @@ def main():
     # Test check_all_statuses against target_dir
     engine = hermes_patches.PatchEngine(target_dir=target_dir, dry_run=True, verbose=False)
     statuses = engine.check_all_statuses()
-    # v1.9.0: registry 9 项，其中 table 默认退役（default_off），实际打 8 项
-    assert len(statuses) == 9, f"Expected 9 registry entries, got {len(statuses)}"
-    applied = [s for s in statuses if s["applied"]]
-    assert len(applied) == 8, f"Expected 8 applied patches, got {len(applied)}: {[s['id'] for s in statuses if not s['applied']]}"
+    # v1.9.1: 状态统计只算在用补丁；退役补丁单独列出，不再混进 "x/9"
+    active = [s for s in statuses if not s.get("retired")]
+    retired = [s for s in statuses if s.get("retired")]
+    assert len(active) == 8, f"Expected 8 in-use patches, got {len(active)}"
+    assert all(s["applied"] for s in active), f"Unapplied: {[s['id'] for s in active if not s['applied']]}"
+    assert len(retired) == 1 and retired[0]["id"] == "table", f"Unexpected retired set: {[s['id'] for s in retired]}"
 
     # -------------------------------------------------------------
     # 10. Telegram quote blocks (v1.9.0 新增)

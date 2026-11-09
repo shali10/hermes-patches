@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 import json
 
-__version__ = "1.9.0"
+__version__ = "1.9.1"
 
 
 PATCH_REGISTRY = [
@@ -1160,6 +1160,7 @@ _QUOTE_BLOCK_RE = re.compile(rf'^(?:{_QUOTE_LINE})(?:\n{_QUOTE_LINE})*$', re.MUL
                     "description": item["description"],
                     "status": st,
                     "applied": applied,
+                    "retired": bool(item.get("default_off")),
                     "sub_results": [{"target": r[0], "status": r[1], "detail": r[2]} for r in sub_res],
                 })
         finally:
@@ -1652,8 +1653,10 @@ def main():
     if args.status:
         engine = PatchEngine(target_dir=target, dry_run=True, verbose=False)
         statuses = engine.check_all_statuses()
-        applied_cnt = sum(1 for s in statuses if s["applied"])
-        total_cnt = len(statuses)
+        active = [s for s in statuses if not s.get("retired")]
+        retired = [s for s in statuses if s.get("retired")]
+        applied_cnt = sum(1 for s in active if s["applied"])
+        total_cnt = len(active)
 
         if args.json:
             data = {
@@ -1661,6 +1664,7 @@ def main():
                 "total": total_cnt,
                 "applied": applied_cnt,
                 "all_applied": applied_cnt == total_cnt,
+                "retired_count": len(retired),
                 "patches": {s["id"]: s for s in statuses},
                 "list": statuses,
             }
@@ -1669,11 +1673,14 @@ def main():
 
         print(f"\n🔍 Hermes Agent 补丁应用状态检测:")
         print(f"   目标路径: {target}")
-        print(f"   当前状态: 已应用 {applied_cnt}/{total_cnt} 项补丁\n")
+        retired_note = f"（另有 {len(retired)} 项已退役，不计入）" if retired else ""
+        print(f"   当前状态: 在用补丁已应用 {applied_cnt}/{total_cnt} 项{retired_note}\n")
         print("  " + "-" * 70)
-        for s in statuses:
+        for s in active:
             badge = "🟢 [已应用 ✓]" if s["applied"] else "🟡 [未应用 -]"
             print(f"   [{s['num']:>2}]  {badge}  {s['name']}")
+        for s in retired:
+            print(f"   [{s['num']:>2}]  ⚪ [已退役 —]  {s['name']}")
         print("  " + "-" * 70 + "\n")
         sys.exit(0)
 

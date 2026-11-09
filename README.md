@@ -200,7 +200,7 @@ curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install
 
 > **✨ 全自动一键搞定**：
 > 1. 🔍 **全自动寻径**：通过运行进程、systemd 配置、CLI shebang 与虚拟环境智能识别当前活跃的 Hermes 源码路径；
-> 2. 💉 **全量注入补丁**：编译检查并原子注入全部 9 项增强补丁；
+> 2. 💉 **全量注入补丁**：编译检查并原子注入8 项在用增强补丁（1 项已退役）；
 > 3. ⚙️ **零配置初始化**：自动校验并配置 `~/.hermes/config.yaml`（激活页脚全量计量与参数）；
 > 4. 🧹 **字节码刷新**：清理全部 `__pycache__` 缓存；
 > 5. 🚀 **升级自愈守护**：配置 systemd `ExecStartPre` 守护，Hermes 源码更新后自动重应用；
