@@ -5,6 +5,17 @@
 
 ---
 
+## [v1.9.2] - 2026-11-09
+
+### 🧹 删除 CJK 补丁并重排编号（不再保留退役残项）
+
+- **`table` 补丁整体删除**：代码方法、registry 条目、README 表格行一并移除。上游 v0.23+ 用 `telegram.extra.allow_cjk_rich_messages: true` 即可；需要给旧版本打这个补丁的，`git checkout v1.9.1`。
+- **编号重排为连续 2–9**：footer 2、menu 3、db 4、clean-think 5、smart-split 6、terminal-cwd 7、state-guard 8、quote-blocks 9。菜单项 `[1]` 仍保留给"全量安装"。
+- **数字别名改为动态派生**：`--only 4` / `--skip patch-4` 由 `num` 字段现算，删掉了历史上因重排留下的重复别名（例如 clean-think 曾同时挂着 6 和 8、smart-split 挂 7 和 9），再改顺序也不会残留旧编号。
+- **状态面板**：`8/8`，不再出现"在用/退役"分账措辞（registry 里已无退役项，代码保留 `retired` 字段供以后用）。
+
+---
+
 ## [v1.9.1] - 2026-11-09
 
 ### 🔢 状态统计如实分账（退役补丁不再混入 x/y）

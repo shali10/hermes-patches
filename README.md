@@ -200,7 +200,7 @@ curl -fsSL https://raw.githubusercontent.com/shali10/hermes-patches/main/install
 
 > **✨ 全自动一键搞定**：
 > 1. 🔍 **全自动寻径**：通过运行进程、systemd 配置、CLI shebang 与虚拟环境智能识别当前活跃的 Hermes 源码路径；
-> 2. 💉 **全量注入补丁**：编译检查并原子注入8 项在用增强补丁（1 项已退役）；
+> 2. 💉 **全量注入补丁**：编译检查并原子注入8 项增强补丁；
 > 3. ⚙️ **零配置初始化**：自动校验并配置 `~/.hermes/config.yaml`（激活页脚全量计量与参数）；
 > 4. 🧹 **字节码刷新**：清理全部 `__pycache__` 缓存；
 > 5. 🚀 **升级自愈守护**：配置 systemd `ExecStartPre` 守护，Hermes 源码更新后自动重应用；
@@ -276,14 +276,16 @@ python3 hermes_patches.py --skip menu --auto-config --restart
 | 补丁 ID | 别名 (Aliases) | 作用目标 | 说明 |
 |---|---|---|---|
 | `footer` | `runtime-footer`, `token`, `stats` | `gateway/runtime_footer.py`<br>`gateway/run_turn_persistence.py`<br>`gateway/run_turn_runner.py` | 渲染 Prompt 总量、缓存命中、输出 Token、耗时与上下文占用 |
-| `table` ⚠️已退役 | `cjk-table`, `telegram-table`, `pipe-table` | `plugins/platforms/telegram/adapter.py` | **默认不打**。上游 v0.23+ 原生提供 `telegram.extra.allow_cjk_rich_messages` 开关，用配置替代补丁；仅旧版本需要 `--only table` 显式启用 |
 | `menu` | `telegram-menu`, `menu-zh`, `i18n` | `hermes_cli/commands.py`<br>`hermes_cli/commands_platforms.py` | 汉化 Telegram Bot `/start`, `/new`, `/status`... 命令说明与 `/help` |
 | `db` | `state-db`, `sqlite`, `durability` | `hermes_state_wal.py`<br>`hermes_state_messages.py` | 注入 `busy_timeout=5000` 与会话外键自愈（缩进自适应，覆盖全部批量写入调用点） |
 | `clean-think` | `think`, `reasoning`, `suppress-thinking` | `agent/think_scrubber.py`<br>`hermes_cli/cli_init_mixin.py` | 净化思考过程与变体标签（`antml:thought` 等），终端默认静音冗长思维链 |
 | `smart-split` | `split`, `chunking`, `telegram-split` | `gateway/platforms/base.py` | 4096+ 长消息优先在自然段落切分，保护代码块与表格无损 |
 | `terminal-cwd` | `cwd`, `terminal`, `deleted-workdir` | `tools/environments/base.py` | 显式 workdir 被删除后，在构建命令 wrapper 前回退到可用父目录，避免 exit 126 |
-| `state-guard` | `db-guard`, `anti-delete`, `state-db-guard`, `guard` | `tools/approval_detection.py` | 对 live state.db 注入动作级防删护栏，精准拦截 rm/truncate/>/find-delete 误删 |
-| `quote-blocks` | `quote`, `blockquote`, `expandable-quote` | `plugins/platforms/telegram/telegram_markdown.py` | 引用块整块渲染：块内空行不破块、`>无空格` 也能识别、末行 `\|\|` 折叠标记正确落位（v0.23 起 markdown 转换独立成模块） |
+| `state-guard` | `db-guard`, `anti-delete`, `state-db-guard` | `tools/approval_detection.py` | 对 live state.db 注入动作级防删护栏，精准拦截 rm/truncate/>/find-delete 误删 |
+| `quote-blocks` | `quote`, `blockquote`, `expandable-quote` | `plugins/platforms/telegram/telegram_markdown.py` | 引用块整块渲染：块内空行不破块、`>无空格` 也能识别、末行 `\|\|` 折叠标记正确落位 |
+
+> 编号即 `--only` / `--skip` 可用的序号（2–9）。菜单项 `[1]` 保留给"全量安装"，所以编号从 2 起。
+> v1.9.2 起已删除 CJK 表格补丁：上游 v0.23+ 请直接用 `telegram.extra.allow_cjk_rich_messages: true`；旧版本可 checkout `v1.9.1` 标签取用该补丁。
 
 ---
 

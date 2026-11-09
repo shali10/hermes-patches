@@ -87,7 +87,7 @@ def main():
     # -------------------------------------------------------------
     # 1. Runtime Footer
     # -------------------------------------------------------------
-    print("Testing 1/8: Runtime Footer...")
+    print("Testing 1/11: Runtime Footer...")
     from gateway.runtime_footer import format_runtime_footer
     line = format_runtime_footer(
         model="gemini-3.7-flash-high",
@@ -107,24 +107,19 @@ def main():
     # -------------------------------------------------------------
     # 2. Telegram CJK rich (v1.9.0: 上游 allow_cjk_rich_messages 开关优先，补丁默认退役)
     # -------------------------------------------------------------
-    print("Testing 2/10: Telegram CJK rich (upstream switch)...")
+    print("Testing 2/11: Telegram CJK rich (upstream switch)...")
     from plugins.platforms.telegram.adapter import TelegramAdapter
     adapter = TelegramAdapter.__new__(TelegramAdapter)
     table_sample = "测试表格\n| a | b |\n|---|---|\n| 1 | 2 |"
-    garble_doc = TelegramAdapter._has_telegram_desktop_cjk_rich_garble_shape.__doc__ or ""
-    if "Allow Telegram CJK rich formatting" in garble_doc:
-        # 旧版本兼容模式（--only table 打过补丁）：强制放行
-        assert adapter._has_telegram_desktop_cjk_rich_garble_shape(table_sample) is False
-    else:
-        # v0.23+：由 telegram.extra.allow_cjk_rich_messages 控制，补丁不打
-        adapter_src = (target_dir / "plugins/platforms/telegram/adapter.py").read_text(encoding="utf-8")
-        assert "_allow_cjk_rich_messages" in adapter_src, " upstream CJK switch missing"
+    adapter_src = (target_dir / "plugins/platforms/telegram/adapter.py").read_text(encoding="utf-8")
+    # v1.9.2 起本仓库不再提供 CJK 补丁，依赖上游 telegram.extra.allow_cjk_rich_messages
+    assert "_allow_cjk_rich_messages" in adapter_src, "upstream CJK switch missing"
     assert adapter._needs_rich_rendering(table_sample) is True
 
     # -------------------------------------------------------------
     # 3. Telegram Chinese Commands
     # -------------------------------------------------------------
-    print("Testing 3/8: Telegram Chinese Commands...")
+    print("Testing 3/11: Telegram Chinese Commands...")
     try:
         from hermes_cli.commands_platforms import telegram_bot_commands
     except ImportError:
@@ -139,7 +134,7 @@ def main():
     # -------------------------------------------------------------
     # 4. State DB Hardening
     # -------------------------------------------------------------
-    print("Testing 4/8: State DB Hardening...")
+    print("Testing 4/11: State DB Hardening...")
     state_file = target_dir / "hermes_state.py"
     wal_file = target_dir / "hermes_state_wal.py"
     messages_file = target_dir / "hermes_state_messages.py"
@@ -167,7 +162,7 @@ def main():
     # -------------------------------------------------------------
     # 7. Clean Thinking
     # -------------------------------------------------------------
-    print("Testing 5/8: Clean Thinking...")
+    print("Testing 5/11: Clean Thinking...")
     cli_file = target_dir / "cli.py"
     stream_file = target_dir / "gateway/stream_consumer.py"
     cli_mixin = target_dir / "hermes_cli/cli_stream_mixin.py"
@@ -184,21 +179,21 @@ def main():
     # -------------------------------------------------------------
     # 8. Telegram 4096 Smart Split
     # -------------------------------------------------------------
-    print("Testing 6/8: Telegram 4096 Smart Split...")
+    print("Testing 6/11: Telegram 4096 Smart Split...")
     base_code = (target_dir / "gateway/platforms/base.py").read_text(encoding="utf-8")
     assert "hermes-patches smart-split" in base_code, "smart-split missing in gateway/platforms/base.py"
 
     # -------------------------------------------------------------
     # 9. Terminal CWD Recovery
     # -------------------------------------------------------------
-    print("Testing 7/8: Terminal CWD Recovery...")
+    print("Testing 7/11: Terminal CWD Recovery...")
     env_base_code = (target_dir / "tools/environments/base.py").read_text(encoding="utf-8")
     assert "_resolve_safe_cwd" in env_base_code, "Safe cwd recovery missing in tools/environments/base.py"
 
     # -------------------------------------------------------------
     # 10. State DB Anti-Destruction Guard
     # -------------------------------------------------------------
-    print("Testing 8/8: State DB Anti-Destruction Guard...")
+    print("Testing 8/11: State DB Anti-Destruction Guard...")
     app_file = target_dir / "tools/approval.py"
     app_detect_file = target_dir / "tools/approval_detection.py"
     approval_full_code = app_detect_file.read_text(encoding="utf-8") if app_detect_file.is_file() else app_file.read_text(encoding="utf-8")
@@ -231,20 +226,20 @@ def main():
     import hermes_patches
 
     # Test token expansion
-    assert hermes_patches.expand_selection_tokens(["2", "3"]) == {"footer", "table"}
-    assert hermes_patches.expand_selection_tokens(["2,3,7"]) == {"footer", "table", "smart-split"}
-    assert hermes_patches.expand_selection_tokens(["2-5"]) == {"footer", "table", "menu", "db"}
-    assert hermes_patches.expand_selection_tokens(["2~4, 9"]) == {"footer", "table", "menu", "state-guard"}
+    assert hermes_patches.expand_selection_tokens(["2", "3"]) == {"footer", "menu"}
+    assert hermes_patches.expand_selection_tokens(["9"]) == {"quote-blocks"}
+    assert hermes_patches.expand_selection_tokens(["patch-4"]) == {"db"}
+    assert hermes_patches.expand_selection_tokens(["2,3,7"]) == {"footer", "menu", "terminal-cwd"}
+    assert hermes_patches.expand_selection_tokens(["2-5"]) == {"footer", "menu", "db", "clean-think"}
+    assert hermes_patches.expand_selection_tokens(["2~4, 9"]) == {"footer", "menu", "db", "quote-blocks"}
 
     # Test check_all_statuses against target_dir
     engine = hermes_patches.PatchEngine(target_dir=target_dir, dry_run=True, verbose=False)
     statuses = engine.check_all_statuses()
-    # v1.9.1: 状态统计只算在用补丁；退役补丁单独列出，不再混进 "x/9"
-    active = [s for s in statuses if not s.get("retired")]
-    retired = [s for s in statuses if s.get("retired")]
-    assert len(active) == 8, f"Expected 8 in-use patches, got {len(active)}"
-    assert all(s["applied"] for s in active), f"Unapplied: {[s['id'] for s in active if not s['applied']]}"
-    assert len(retired) == 1 and retired[0]["id"] == "table", f"Unexpected retired set: {[s['id'] for s in retired]}"
+    # v1.9.2: CJK 补丁已删除，registry 只剩 8 项，全部必须已应用
+    assert len(statuses) == 8, f"Expected 8 registered patches, got {len(statuses)}"
+    assert all(s["applied"] for s in statuses), f"Unapplied: {[s['id'] for s in statuses if not s['applied']]}"
+    assert [s["num"] for s in statuses] == list(range(2, 10)), f"Numbering broken: {[s['num'] for s in statuses]}"
 
     # -------------------------------------------------------------
     # 10. Telegram quote blocks (v1.9.0 新增)

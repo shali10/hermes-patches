@@ -24,79 +24,70 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 import json
 
-__version__ = "1.9.1"
+__version__ = "1.9.2"
 
 
 PATCH_REGISTRY = [
     {
         "id": "footer",
         "num": 2,
-        "aliases": ["runtime-footer", "token", "tokens", "stats", "2", "patch-2"],
+        "aliases": ["runtime-footer", "token", "tokens", "stats"],
         "name": "📊 Runtime Footer (Token全量计量/缓存命中/耗时)",
         "method": "patch_runtime_footer",
         "description": "在消息页脚展示 Prompt 总量、缓存命中数及百分比、输出 Token、上下文比例与执行耗时。",
     },
     {
-        "id": "table",
-        "num": 3,
-        "aliases": ["cjk-table", "telegram-table", "telegram-rich", "pipe-table", "3", "patch-3"],
-        "name": "📑 Telegram CJK 原生 Markdown 表格放行 (已被上游开关取代)",
-        "method": "patch_telegram_cjk_rich",
-        "description": "上游 v0.23+ 已提供 telegram.extra.allow_cjk_rich_messages 开关，优先用配置；本补丁仅作旧版本兼容，默认不启用（--only table 才打）。",
-        "default_off": True,
-    },
-    {
         "id": "menu",
-        "num": 4,
-        "aliases": ["telegram-menu", "menu-zh", "help-zh", "i18n", "localization", "4", "patch-4"],
+        "num": 3,
+        "aliases": ["telegram-menu", "menu-zh", "help-zh", "i18n", "localization"],
         "name": "🇨🇳 Telegram 快捷菜单与 /help /commands 全中文汉化",
         "method": "patch_telegram_menu_zh",
-        "description": "全量汉化 Telegram Bot 指令菜单以及 /help、/commands 全部 99 个斜杠命令说明与用法提示。",
+        "description": "全量汉化 Telegram Bot 指令菜单以及 /help、/commands 全部斜杠命令说明与用法提示。",
     },
     {
         "id": "db",
-        "num": 5,
-        "aliases": ["state-db", "sqlite", "durability", "concurrency", "5", "patch-5"],
+        "num": 4,
+        "aliases": ["state-db", "sqlite", "durability", "concurrency"],
         "name": "🛡️ SQLite 生产级外键自愈与高并发防锁死",
         "method": "patch_state_db",
         "description": "设置连接级 busy_timeout=5000 缓解锁表，并自动补齐会话父记录根除外键崩溃。",
     },
     {
         "id": "clean-think",
-        "num": 6,
-        "aliases": ["think", "reasoning", "clean-reasoning", "suppress-thinking", "6", "8", "patch-6", "patch-8"],
+        "num": 5,
+        "aliases": ["think", "reasoning", "clean-reasoning", "suppress-thinking"],
         "name": "🧠 全链路深度思考过程强力净化",
         "method": "patch_clean_thinking",
         "description": "全链路剥离 <think> 等变体思考标签与未闭合块，CLI 默认静音冗余思维链弹框。",
     },
     {
         "id": "smart-split",
-        "num": 7,
-        "aliases": ["split", "telegram-split", "chunking", "message-chunker", "7", "9", "patch-7", "patch-9"],
+        "num": 6,
+        "aliases": ["split", "telegram-split", "chunking", "message-chunker"],
         "name": "✂️ Telegram 4096 长消息智能段落切分",
         "method": "patch_smart_split",
-        "description": "4096+ 字符长消息优先在自然段落 (\n\n) 边界切分，自动补齐代码围栏与表格结构。",
+        "description": "4096+ 字符长消息优先在自然段落 (\\n\\n) 边界切分，自动补齐代码围栏与表格结构。",
     },
     {
         "id": "terminal-cwd",
-        "num": 8,
-        "aliases": ["cwd", "terminal", "deleted-workdir", "cwd-recovery", "8", "10", "patch-8", "patch-10"],
+        "num": 7,
+        "aliases": ["cwd", "terminal", "deleted-workdir", "cwd-recovery"],
         "name": "📁 Terminal 失效工作目录自动回退",
         "method": "patch_terminal_cwd_recovery",
         "description": "显式 workdir 被删除后，在构建命令 wrapper 前回退到可用父目录，避免 exit 126。",
     },
     {
         "id": "state-guard",
-        "num": 9,
-        "aliases": ["db-guard", "anti-delete", "state-db-guard", "guard", "9", "11", "patch-9", "patch-11"],
+        "num": 8,
+        "aliases": ["db-guard", "anti-delete", "state-db-guard", "guard"],
         "name": "🧱 SQLite 主库防误删护栏 (State DB Anti-Destruction Guard)",
         "method": "patch_state_db_guard",
         "description": "对 live state.db 注入动作级防删护栏，精准拦截 rm/truncate/>/find-delete 误删，免除全量丢失风险。",
     },
     {
         "id": "quote-blocks",
-        "num": 10,
-        "aliases": ["quote", "blockquote", "expandable-quote", "mdv2-quote", "10", "patch-10"],
+        "num": 9,
+        "aliases": ["quote", "blockquote", "expandable-quote", "mdv2-quote"],
         "name": "💬 Telegram 引用块整块渲染 (空行/无空格/末行折叠标记)",
         "method": "patch_telegram_quote_blocks",
         "description": "v0.23 起引用块转换迁到 telegram_markdown.py：本补丁让连续引用按块处理，支持 >无空格、块内空行与末行 || 折叠标记。",
@@ -122,6 +113,11 @@ def expand_selection_tokens(tokens: Optional[Iterable[str]]) -> Optional[Set[str
         alias_to_id[item["id"].lower()] = item["id"].lower()
         for a in item.get("aliases", []):
             alias_to_id[a.lower()] = item["id"].lower()
+        # 数字与 patch-N 别名由 num 动态派生，避免改动顺序后残留旧编号
+        num = item.get("num")
+        if num is not None:
+            alias_to_id[str(num)] = item["id"].lower()
+            alias_to_id[f"patch-{num}"] = item["id"].lower()
 
     resolved: Set[str] = set()
 
@@ -261,7 +257,7 @@ class PatchEngine:
             return False
 
     # -------------------------------------------------------------
-    # Patch 1: Runtime Footer Full Tokens & Latency
+    # Patch 2: Runtime Footer Full Tokens & Latency
     # -------------------------------------------------------------
     def patch_runtime_footer(self) -> bool:
         def transform_footer(src: str) -> str:
@@ -487,29 +483,6 @@ def build_footer_line(
             self.apply_file_patch("gateway/run_turn_runner.py", transform_run_turn_runner, "⚙️ Runner 缓存 Token 计量传递")
         ok3 = self.apply_file_patch("agent/usage_pricing.py", transform_usage_pricing, "🧠 多模型厂商全字段缓存解析")
         return ok1 and ok2 and ok3
-
-    # -------------------------------------------------------------
-    # Patch 2: Telegram CJK Native Rich Formatting & Table Bypass
-    # -------------------------------------------------------------
-    def patch_telegram_cjk_rich(self) -> bool:
-        def transform(src: str) -> str:
-            cand = src
-            if "Allow Telegram CJK rich formatting" in cand:
-                return cand
-
-            old_fn = "def _has_telegram_desktop_cjk_rich_garble_shape(self, content: str) -> bool:"
-            new_fn = """def _has_telegram_desktop_cjk_rich_garble_shape(self, content: str) -> bool:
-        \"\"\"Allow Telegram CJK rich formatting and native pipe tables (telegram-allow-cjk-rich).\"\"\"
-        return False"""
-
-            if old_fn in cand:
-                start_idx = cand.find(old_fn)
-                next_fn_idx = cand.find("def _needs_rich_rendering", start_idx)
-                if start_idx >= 0 and next_fn_idx > start_idx:
-                    cand = cand[:start_idx] + new_fn + "\n\n    " + cand[next_fn_idx:]
-            return cand
-
-        return self.apply_file_patch("plugins/platforms/telegram/adapter.py", transform, "📑 Telegram 原生表格放行")
 
     # -------------------------------------------------------------
     # Patch 3: Telegram Menu & /help /commands Full Chinese Localization
@@ -815,7 +788,7 @@ def build_footer_line(
         return ok_wal and ok_msg
 
     # -------------------------------------------------------------
-    # Patch 7: Deep Thinking & Reasoning Process Cleaner
+    # Patch 5: Deep Thinking & Reasoning Process Cleaner
     # -------------------------------------------------------------
     def patch_clean_thinking(self) -> bool:
         scrubber_file = self.target_dir / "agent/think_scrubber.py"
@@ -879,7 +852,7 @@ def build_footer_line(
         return (ok_scrubber and ok_cli_init) if scrubber_file.is_file() else (ok_legacy_cli and ok_legacy_sc)
 
     # -------------------------------------------------------------
-    # Patch 8: Telegram 4096 Safe Long Message Paragraph Chunker
+    # Patch 6: Telegram 4096 Safe Long Message Paragraph Chunker
     # -------------------------------------------------------------
     def patch_smart_split(self) -> bool:
         def transform_base_platform(src: str) -> str:
@@ -900,7 +873,7 @@ def build_footer_line(
         return self.apply_file_patch("gateway/platforms/base.py", transform_base_platform, "✂️ Telegram 4096 智能段落切分")
 
     # -------------------------------------------------------------
-    # Patch 9: Local terminal explicit cwd recovery
+    # Patch 7: Local terminal explicit cwd recovery
     # -------------------------------------------------------------
     def patch_terminal_cwd_recovery(self) -> bool:
         def transform_base_env(src: str) -> str:
@@ -945,7 +918,7 @@ def build_footer_line(
         )
 
     # -------------------------------------------------------------
-    # Patch 10: State DB Anti-Destruction Guard
+    # Patch 8: State DB Anti-Destruction Guard
     # -------------------------------------------------------------
     def patch_state_db_guard(self) -> bool:
         def transform_approval(src: str) -> str:
@@ -998,7 +971,7 @@ def build_footer_line(
         )
 
     # -------------------------------------------------------------
-    # Patch 10: Telegram quote blocks (v0.23 telegram_markdown.py)
+    # Patch 9: Telegram quote blocks (v0.23 telegram_markdown.py)
     # -------------------------------------------------------------
     def patch_telegram_quote_blocks(self) -> bool:
         md_rel = "plugins/platforms/telegram/telegram_markdown.py"
@@ -1673,8 +1646,10 @@ def main():
 
         print(f"\n🔍 Hermes Agent 补丁应用状态检测:")
         print(f"   目标路径: {target}")
-        retired_note = f"（另有 {len(retired)} 项已退役，不计入）" if retired else ""
-        print(f"   当前状态: 在用补丁已应用 {applied_cnt}/{total_cnt} 项{retired_note}\n")
+        if retired:
+            print(f"   当前状态: 在用补丁已应用 {applied_cnt}/{total_cnt} 项（另有 {len(retired)} 项已退役，不计入）\n")
+        else:
+            print(f"   当前状态: 已应用 {applied_cnt}/{total_cnt} 项补丁\n")
         print("  " + "-" * 70)
         for s in active:
             badge = "🟢 [已应用 ✓]" if s["applied"] else "🟡 [未应用 -]"
