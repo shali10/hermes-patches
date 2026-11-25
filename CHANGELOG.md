@@ -5,6 +5,22 @@
 
 ---
 
+## [v2.0.0] - 2026-11-25
+
+### ✂️ 精简到 4 项：移除已被上游覆盖的补丁
+
+- **移除 `db`、`clean-think`、`terminal-cwd`、`state-guard`**：v0.23.3+ 上游已全部原生覆盖，继续保留只会白打或产生语义冲突。
+  - `db`：`hermes_state_messages.py`、`hermes_state_wal.py` 被 `be3d6affc8` 整个删除，存储重构进 `persistence/`；`persistence/sqlite/_holder.py` 自带 `_READ_BUSY_TIMEOUT_S = 5.0` 与 `PRAGMA foreign_keys=ON`，另有 `housekeeping/maintenance.py` 孤儿清扫。
+  - `clean-think`：`agent/think_scrubber.py` 内建中英双语标签（思考/反思/推理/推敲 + think/reasoning/…）。
+  - `terminal-cwd`：`tools/environments/base.py` 的 `_usable_cwd()` + `allow_cwd_fallback` 已实现同等回退。
+  - `state-guard`：`tools/approval_hermes_store.py` 的 `HERMES_PROTECTED_SUBPATHS` 拦截范围更宽（含 shred/cp/rsync/dd/tee/重定向/sqlite3 写语句与 `-wal/-shm/-journal`）。
+- **编号重排为 1–4**：footer 1、menu 2、smart-split 3、quote-blocks 4，`--status` 直接显示 `4/4`，不再有退役项混在分母里。
+- **`smart-split` 适配 v0.23.3+ 新位置**：`truncate_message` 主体已迁到 `gateway/platforms/base_chunking.py`（模块级、8 空格缩进），旧锚点仍指向 `base.py` 导致报 `UNCHANGED` 却什么都没改。改为双锚点：先试 `base_chunking.py`，未命中再退回 `base.py`。
+- **`smart-split` 修标题落单**：`rfind("\n\n")` 会选中"标题后那行空行"，把标题孤零零留在上一段末尾。新增回退——切点前最后一行若是 `#` 标题，退到该标题前的空行。
+- **`footer` 修正则越界**：旧边界 `(?=\Z)` 会一路删到文件末尾，把 v0.23.3 新增的 `FooteredReply`、`caption_with_footer`、`footer_onto_photo_caption`、`send_footer_unless_captioned` 全部吃掉，导致 `base.py` 直接 `ImportError` 起不来。改为停在下个 `class`/EOF。
+
+---
+
 ## [v1.9.3] - 2026-11-09
 
 ### 🔢 编号从 1 起，全量安装改用 `[A]`

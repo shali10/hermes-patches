@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 import json
 
-__version__ = "1.9.3"
+__version__ = "2.0.0"
 
 
 PATCH_REGISTRY = [
@@ -45,48 +45,16 @@ PATCH_REGISTRY = [
         "description": "全量汉化 Telegram Bot 指令菜单以及 /help、/commands 全部斜杠命令说明与用法提示。",
     },
     {
-        "id": "db",
-        "num": 3,
-        "aliases": ["state-db", "sqlite", "durability", "concurrency"],
-        "name": "🛡️ SQLite 生产级外键自愈与高并发防锁死",
-        "method": "patch_state_db",
-        "description": "设置连接级 busy_timeout=5000 缓解锁表，并自动补齐会话父记录根除外键崩溃。",
-    },
-    {
-        "id": "clean-think",
-        "num": 4,
-        "aliases": ["think", "reasoning", "clean-reasoning", "suppress-thinking"],
-        "name": "🧠 全链路深度思考过程强力净化",
-        "method": "patch_clean_thinking",
-        "description": "全链路剥离 <think> 等变体思考标签与未闭合块，CLI 默认静音冗余思维链弹框。",
-    },
-    {
         "id": "smart-split",
-        "num": 5,
+        "num": 3,
         "aliases": ["split", "telegram-split", "chunking", "message-chunker"],
         "name": "✂️ Telegram 4096 长消息智能段落切分",
         "method": "patch_smart_split",
         "description": "4096+ 字符长消息优先在自然段落 (\\n\\n) 边界切分，自动补齐代码围栏与表格结构。",
     },
     {
-        "id": "terminal-cwd",
-        "num": 6,
-        "aliases": ["cwd", "terminal", "deleted-workdir", "cwd-recovery"],
-        "name": "📁 Terminal 失效工作目录自动回退",
-        "method": "patch_terminal_cwd_recovery",
-        "description": "显式 workdir 被删除后，在构建命令 wrapper 前回退到可用父目录，避免 exit 126。",
-    },
-    {
-        "id": "state-guard",
-        "num": 7,
-        "aliases": ["db-guard", "anti-delete", "state-db-guard", "guard"],
-        "name": "🧱 SQLite 主库防误删护栏 (State DB Anti-Destruction Guard)",
-        "method": "patch_state_db_guard",
-        "description": "对 live state.db 注入动作级防删护栏，精准拦截 rm/truncate/>/find-delete 误删，免除全量丢失风险。",
-    },
-    {
         "id": "quote-blocks",
-        "num": 8,
+        "num": 4,
         "aliases": ["quote", "blockquote", "expandable-quote", "mdv2-quote"],
         "name": "💬 Telegram 引用块整块渲染 (空行/无空格/末行折叠标记)",
         "method": "patch_telegram_quote_blocks",
@@ -387,8 +355,17 @@ def build_footer_line(
         cache_write_tokens=cache_write_tokens,
         **kwargs,
     )"""
-            old_footer_pat = r'def format_runtime_footer\(.*?(?=\Z)'
-            cand = re.sub(old_footer_pat, footer_def, cand, count=1, flags=re.DOTALL)
+            # Replace format_runtime_footer AND the following build_footer_line in one go:
+            # footer_def already carries its own build_footer_line, so stopping before the
+            # upstream one leaves a duplicate definition. Stop at the next class/EOF — that
+            # keeps v0.23.3's FooteredReply / caption_with_footer / footer_onto_photo_caption
+            # / send_footer_unless_captioned, which base.py imports. The old (?=\Z) boundary
+            # ate them all and broke the gateway with an ImportError.
+            # Indented nested defs (context_pct, served) never match "\ndef " or "\nclass ".
+            old_footer_pat = r'def format_runtime_footer\(.*?(?=\nclass |\Z)'
+            cand, n = re.subn(old_footer_pat, lambda _m: footer_def + "\n\n", cand, count=1, flags=re.DOTALL)
+            if n == 0:  # shape changed again: keep the historical boundary
+                cand = re.sub(r'def format_runtime_footer\(.*?(?=\Z)', footer_def, cand, count=1, flags=re.DOTALL)
             return cand
 
         def transform_gateway_run(src: str) -> str:
@@ -690,173 +667,7 @@ def build_footer_line(
         return ok1
 
     # -------------------------------------------------------------
-    # Patch 3: State DB Foreign Key & Contention Self-Heal
-    # -------------------------------------------------------------
-    def patch_state_db(self) -> bool:
-        wal_file = self.target_dir / "hermes_state_wal.py"
-        msg_file = self.target_dir / "hermes_state_messages.py"
-
-        ok_wal = True
-        ok_msg = True
-
-        if wal_file.is_file():
-            def transform_wal(src: str) -> str:
-                cand = src
-                if "PRAGMA busy_timeout = 5000" in cand:
-                    return cand
-                anchor = "def apply_database_pragmas("
-                if anchor in cand:
-                    pos = cand.find(anchor)
-                    doc_end = cand.find('"""\n', pos)
-                    if doc_end > pos:
-                        insert_pos = doc_end + len('"""\n')
-                        bt_code = """    with contextlib.suppress(Exception):\n        conn.execute("PRAGMA busy_timeout = 5000")\n\n"""
-                        cand = cand[:insert_pos] + bt_code + cand[insert_pos:]
-                return cand
-            ok_wal = self.apply_file_patch("hermes_state_wal.py", transform_wal, "🛡️ SQLite WAL Busy Timeout 加固")
-
-        if msg_file.is_file():
-            def transform_messages(src: str) -> str:
-                cand = src
-                if "FK self-heal" in cand:
-                    return cand
-
-                heal_tpl = (
-                    "{ind}# FK self-heal: ensure the session parent row exists\n"
-                    "{ind}try:\n"
-                    "{ind}    conn.execute(\n"
-                    "{ind}        \"INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)\",\n"
-                    "{ind}        (session_id, time.time()),\n"
-                    "{ind}    )\n"
-                    "{ind}except Exception:\n"
-                    "{ind}    pass"
-                )
-
-                def _indent_of(line: str) -> str:
-                    return line[: len(line) - len(line.lstrip(" \t"))]
-
-                # 缩进自适应：上游重构会改变锚点行缩进层级，硬编码 12 空格会炸 IndentationError。
-                # 单条插入锚点
-                single_anchor = "msg_id = conn.execute(_INSERT_MESSAGE_SQL, params).lastrowid"
-                # 批量插入锚点（v0.23 起有 3 处调用点）
-                batch_anchor = "self._insert_message_rows(conn, session_id, "
-
-                out_lines = []
-                for line in cand.split("\n"):
-                    if single_anchor in line or batch_anchor in line:
-                        out_lines.append(heal_tpl.format(ind=_indent_of(line)))
-                    out_lines.append(line)
-                return "\n".join(out_lines)
-            ok_msg = self.apply_file_patch("hermes_state_messages.py", transform_messages, "🛡️ SQLite 消息外键自愈加固")
-
-        # Monolith hermes_state.py fallback
-        def transform(src: str) -> str:
-            cand = src
-            # 1. State DB contention busy_timeout in apply_database_pragmas
-            if "PRAGMA busy_timeout = 5000" not in cand:
-                pragma_anchor = "def apply_database_pragmas("
-                if pragma_anchor in cand:
-                    p_start = cand.find(pragma_anchor)
-                    doc_end = cand.find('"""\n    try:', p_start)
-                    if doc_end > p_start:
-                        bt_code = '''"""\n    try:\n        conn.execute("PRAGMA busy_timeout = 5000")\n    except Exception:\n        pass\n\n    try:'''
-                        cand = cand[:doc_end] + bt_code + cand[doc_end + len('"""\n    try:'):]
-
-            # 2. FK self-heal in append_message
-            msg_anchor = "def append_message("
-            if msg_anchor in cand and "FK self-heal: ensure the session parent row exists" not in cand:
-                m_start = cand.find(msg_anchor)
-                ins_idx = cand.find('cursor = conn.execute(\n                """INSERT INTO messages', m_start)
-                if ins_idx > m_start:
-                    heal_code = '''# FK self-heal: ensure the session parent row exists.\n            try:\n                conn.execute(\n                    "INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)",\n                    (session_id, time.time()),\n                )\n            except Exception:\n                pass\n\n            '''
-                    cand = cand[:ins_idx] + heal_code + cand[ins_idx:]
-
-            # 3. FK self-heal in append_messages_batch
-            batch_anchor = "def append_messages_batch("
-            if batch_anchor in cand and "FK batch self-heal" not in cand:
-                b_start = cand.find(batch_anchor)
-                ins_idx = cand.find('inserted, tool_calls_total = self._insert_message_rows(', b_start)
-                if ins_idx > b_start:
-                    heal_batch = '''# FK batch self-heal: ensure session exists\n                try:\n                    conn.execute(\n                        "INSERT OR IGNORE INTO sessions (id, source, started_at) VALUES (?, 'unknown', ?)",\n                        (session_id, time.time()),\n                    )\n                except Exception:\n                    pass\n\n                '''
-                    cand = cand[:ins_idx] + heal_batch + cand[ins_idx:]
-
-            return cand
-
-        state_file = self.target_dir / "hermes_state.py"
-        if state_file.is_file():
-            state_text = state_file.read_text(encoding="utf-8")
-            if "def apply_database_pragmas(" in state_text or "def append_message(" in state_text:
-                ok_mono = self.apply_file_patch("hermes_state.py", transform, "🛡️ SQLite 外键自愈与防锁表")
-                return ok_mono
-
-        return ok_wal and ok_msg
-
-    # -------------------------------------------------------------
-    # Patch 4: Deep Thinking & Reasoning Process Cleaner
-    # -------------------------------------------------------------
-    def patch_clean_thinking(self) -> bool:
-        scrubber_file = self.target_dir / "agent/think_scrubber.py"
-        ok_scrubber = True
-        if scrubber_file.is_file():
-            def transform_scrubber(src: str) -> str:
-                cand = src
-                if "antml:thought" in cand:
-                    return cand
-                anchor = '"思考", "反思", "推理", "推敲",'
-                addition = '\n    "antml:thought", "reflection", "inner_monologue",'
-                if anchor in cand:
-                    cand = cand.replace(anchor, anchor + addition, 1)
-                return cand
-            ok_scrubber = self.apply_file_patch("agent/think_scrubber.py", transform_scrubber, "🧠 思考标签全表面多源净化")
-
-        cli_init_file = self.target_dir / "hermes_cli/cli_init_mixin.py"
-        ok_cli_init = True
-        if cli_init_file.is_file():
-            def transform_cli_init(src: str) -> str:
-                cand = src
-                old_val = 'self.show_reasoning = display.get("show_reasoning", True)'
-                new_val = 'self.show_reasoning = display.get("show_reasoning", False)'
-                if old_val in cand:
-                    cand = cand.replace(old_val, new_val, 1)
-                return cand
-            ok_cli_init = self.apply_file_patch("hermes_cli/cli_init_mixin.py", transform_cli_init, "🧠 CLI 思考过程默认静音")
-
-        def transform_cli(src: str) -> str:
-            cand = src
-            cand = cand.replace(
-                'self.show_reasoning = CLI_CONFIG["display"].get("show_reasoning", True)',
-                'self.show_reasoning = CLI_CONFIG["display"].get("show_reasoning", False)',
-            )
-            cand = re.sub(
-                r'_OPEN_TAGS\s*=\s*\([^)]+\)',
-                '_OPEN_TAGS = ("<REASONING_SCRATCHPAD>", "<think>", "<reasoning>", "<THINKING>", "<thinking>", "<thought>", "<antml:thought>", "<reflection>", "<inner_monologue>")',
-                cand,
-                count=1,
-            )
-            cand = re.sub(
-                r'_CLOSE_TAGS\s*=\s*\([^)]+\)',
-                '_CLOSE_TAGS = ("</REASONING_SCRATCHPAD>", "</think>", "</reasoning>", "</THINKING>", "</thinking>", "</thought>", "</antml:thought>", "</reflection>", "</inner_monologue>")',
-                cand,
-                count=1,
-            )
-            return cand
-
-        def transform_stream_consumer(src: str) -> str:
-            cand = src
-            old_tags = '''    _OPEN_THINK_TAGS = (\n        "<REASONING_SCRATCHPAD>", "<think>", "<reasoning>",\n        "<THINKING>", "<thinking>", "<thought>",\n    )\n    _CLOSE_THINK_TAGS = (\n        "</REASONING_SCRATCHPAD>", "</think>", "</reasoning>",\n        "</THINKING>", "</thinking>", "</thought>",\n    )'''
-
-            new_tags = '''    _OPEN_THINK_TAGS = (\n        "<REASONING_SCRATCHPAD>", "<think>", "<reasoning>",\n        "<THINKING>", "<thinking>", "<thought>",\n        "<antml:thought>", "<reflection>", "<inner_monologue>",\n    )\n    _CLOSE_THINK_TAGS = (\n        "</REASONING_SCRATCHPAD>", "</think>", "</reasoning>",\n        "</THINKING>", "</thinking>", "</thought>",\n        "</antml:thought>", "</reflection>", "</inner_monologue>",\n    )'''
-            if old_tags in cand:
-                cand = cand.replace(old_tags, new_tags, 1)
-            return cand
-
-        ok_legacy_cli = self.apply_file_patch("cli.py", transform_cli, "🧠 CLI 终端思考过程静音")
-        ok_legacy_sc = self.apply_file_patch("gateway/stream_consumer.py", transform_stream_consumer, "🧠 Gateway 思考标签深度净化")
-
-        return (ok_scrubber and ok_cli_init) if scrubber_file.is_file() else (ok_legacy_cli and ok_legacy_sc)
-
-    # -------------------------------------------------------------
-    # Patch 5: Telegram 4096 Safe Long Message Paragraph Chunker
+    # Patch 3: Telegram 4096 Safe Long Message Paragraph Chunker
     # -------------------------------------------------------------
     def patch_smart_split(self) -> bool:
         def transform_base_platform(src: str) -> str:
@@ -874,108 +685,54 @@ def build_footer_line(
                     cand = cand[:start_idx] + new_code + cand[end_idx:]
             return cand
 
+        # v0.23.3 moved truncate_message's body into gateway/platforms/base_chunking.py as a
+        # module-level function (8-space indent); base.py keeps only a thin wrapper that
+        # imports chunk_markdown_message. Patching base.py there reports UNCHANGED while the
+        # live path stays untouched, so try the new home first. The anchor below is written
+        # with 8-space indentation rather than reused, because transform_base_platform
+        # hardcodes the 12-space method-level indent of base.py's original location.
+        def transform_base_chunking(src: str) -> str:
+            if "hermes-patches smart-split" in src:
+                return src
+            anchor = "        region = remaining[:_cp_limit]\n        split_at = region.rfind(\"\\n\")\n        if split_at < _cp_limit // 2:\n            split_at = region.rfind(\" \")"
+            replacement = (
+                "        region = remaining[:_cp_limit]\n"
+                "        # Prefer paragraph break, then single newline, then space (hermes-patches smart-split)\n"
+                "        split_at = region.rfind(\"\\n\\n\")\n"
+                "        if split_at > 0:\n"
+                "            # Do not strand a heading at the end of the previous chunk: the blank line\n"
+                "            # after a heading is also a paragraph break, so rfind picks it first.\n"
+                "            # When the last line before the split is a heading, retreat to the blank\n"
+                "            # line that precedes that heading.\n"
+                "            _prev = region[:split_at].rsplit(\"\\n\", 1)[-1].lstrip()\n"
+                "            if _prev.startswith(\"#\"):\n"
+                "                _up = region.rfind(\"\\n\\n\", 0, split_at - 1)\n"
+                "                if _up > _cp_limit // 3:\n"
+                "                    split_at = _up\n"
+                "        if split_at < _cp_limit // 3:\n"
+                "            split_at = region.rfind(\"\\n\")\n"
+                "        if split_at < _cp_limit // 2:\n"
+                "            split_at = region.rfind(\" \")"
+            )
+            if anchor in src:
+                return src.replace(anchor, replacement, 1)
+            return src
+
+        chunking_file = self.target_dir / "gateway/platforms/base_chunking.py"
+        if chunking_file.is_file():
+            ok = self.apply_file_patch(
+                "gateway/platforms/base_chunking.py",
+                transform_base_chunking,
+                "✂️ Telegram 4096 智能段落切分 (base_chunking)",
+            )
+            if ok and "hermes-patches smart-split" in chunking_file.read_text(encoding="utf-8"):
+                return True
+            # New anchor did not land (yet another reshape): fall through to base.py.
+
         return self.apply_file_patch("gateway/platforms/base.py", transform_base_platform, "✂️ Telegram 4096 智能段落切分")
 
     # -------------------------------------------------------------
-    # Patch 6: Local terminal explicit cwd recovery
-    # -------------------------------------------------------------
-    def patch_terminal_cwd_recovery(self) -> bool:
-        def transform_base_env(src: str) -> str:
-            marker = "# hermes-patches terminal-cwd-recovery"
-            if marker in src:
-                return src
-            old = """        effective_timeout = timeout or self.timeout
-        effective_cwd = cwd or self.cwd
-
-        # Merge sudo stdin with caller stdin"""
-            new = """        effective_timeout = timeout or self.timeout
-        effective_cwd = cwd or self.cwd
-        # hermes-patches terminal-cwd-recovery
-        # Explicit per-command workdirs can be deleted after routing records
-        # them. Resolve a safe local ancestor before _wrap_command emits cd;
-        # LocalEnvironment's Popen-only recovery is otherwise too late.
-        if self.is_local:
-            try:
-                from tools.environments.local import _resolve_safe_cwd
-                effective_cwd = _resolve_safe_cwd(effective_cwd)
-            except Exception:
-                logger.debug(\"Could not resolve safe local command cwd\", exc_info=True)
-
-        # Merge sudo stdin with caller stdin"""
-            if old in src:
-                return src.replace(old, new, 1)
-            # Current production source may already contain the equivalent fix
-            # without the persistence marker; tag it idempotently.
-            existing = """        if self.is_local:
-            try:
-                from tools.environments.local import _resolve_safe_cwd
-
-                effective_cwd = _resolve_safe_cwd(effective_cwd)"""
-            if existing in src:
-                return src.replace("        if self.is_local:\n", f"        {marker}\n        if self.is_local:\n", 1)
-            return src
-
-        return self.apply_file_patch(
-            "tools/environments/base.py",
-            transform_base_env,
-            "📁 Terminal 失效工作目录自动回退",
-        )
-
-    # -------------------------------------------------------------
-    # Patch 7: State DB Anti-Destruction Guard
-    # -------------------------------------------------------------
-    def patch_state_db_guard(self) -> bool:
-        def transform_approval(src: str) -> str:
-            cand = src
-            marker = "# hermes-patches state-guard"
-            if marker in cand:
-                return cand
-
-            old_anchor = """    (_CMDPOS + r'systemctl\\s+(poweroff|reboot|halt|kexec)\\b', "systemctl poweroff/reboot"),
-    (_CMDPOS + r'telinit\\s+[06]\\b', "telinit 0/6 (shutdown/reboot)"),
-]"""
-            new_patterns = """    (_CMDPOS + r'systemctl\\s+(poweroff|reboot|halt|kexec)\\b', "systemctl poweroff/reboot"),
-    (_CMDPOS + r'telinit\\s+[06]\\b', "telinit 0/6 (shutdown/reboot)"),
-    # hermes-patches state-guard
-    # Action-anchored floor preventing accidental deletion/truncation of live state.db
-    (_CMDPOS + r'(?:rm|unlink|truncate)\\b[^\\n]*\\b(?:\\S*\\/)?state\\.db(?:-(?:wal|shm|journal))?(?![A-Za-z0-9_.])', "destructive operation targeting live Hermes database (state.db)"),
-    (r'(?:>|>>)\\s*(?:\\S*\\/)?state\\.db(?:-(?:wal|shm|journal))?(?![A-Za-z0-9_.])', "truncate/overwrite of live Hermes database (state.db)"),
-    (_CMDPOS + r'find\\b[^\\n]*state\\.db[^\\n]*(?:-delete|-exec\\s+rm)\\b', "find-delete targeting live Hermes database (state.db)"),
-    (_CMDPOS + r'mv\\b[^\\n]*\\b(?:\\S*\\/)?state\\.db(?:-(?:wal|shm|journal))?(?![A-Za-z0-9_.])\\s+', "moving live Hermes database (state.db)"),
-]"""
-            if old_anchor in cand:
-                cand = cand.replace(old_anchor, new_patterns, 1)
-
-            old_quote_mask = """_QUOTE_MASKED_HARDLINE_DESCRIPTIONS = frozenset({
-    "redirect to raw block device",
-    "fork bomb",
-})"""
-            new_quote_mask = """_QUOTE_MASKED_HARDLINE_DESCRIPTIONS = frozenset({
-    "redirect to raw block device",
-    "fork bomb",
-    "truncate/overwrite of live Hermes database (state.db)",
-})"""
-            if old_quote_mask in cand:
-                cand = cand.replace(old_quote_mask, new_quote_mask, 1)
-
-            return cand
-
-        # Upstream modular split for approval detection
-        if (self.target_dir / "tools/approval_detection.py").is_file():
-            return self.apply_file_patch(
-                "tools/approval_detection.py",
-                transform_approval,
-                "🧱 SQLite 主库防误删护栏 (Detection)",
-            )
-
-        return self.apply_file_patch(
-            "tools/approval.py",
-            transform_approval,
-            "🧱 SQLite 主库防误删护栏",
-        )
-
-    # -------------------------------------------------------------
-    # Patch 8: Telegram quote blocks (v0.23 telegram_markdown.py)
+    # Patch 4: Telegram quote blocks (v0.23 telegram_markdown.py)
     # -------------------------------------------------------------
     def patch_telegram_quote_blocks(self) -> bool:
         md_rel = "plugins/platforms/telegram/telegram_markdown.py"

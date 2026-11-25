@@ -215,16 +215,13 @@ hermes-patches --skip menu --auto-config --restart
 
 | Patch ID | Aliases | Target Files | Description |
 |---|---|---|---|
-| `footer` | `runtime-footer`, `token`, `stats` | `gateway/runtime_footer.py`<br>`gateway/run.py` | Renders Prompt totals, cache read tokens, outputs, latency, and context %. |
-| `table` | `cjk-table`, `telegram-table`, `pipe-table` | `plugins/platforms/telegram/adapter.py` | Allows Telegram desktop/mobile native Markdown pipe table rendering. |
-| `menu` | `telegram-menu`, `menu-zh`, `i18n` | `hermes_cli/commands.py` | Localizes Telegram bot `/start`, `/new`, `/status`... command descriptions. |
-| `db` | `state-db`, `sqlite`, `durability` | `hermes_state.py` | Adds `busy_timeout=5000` & auto-heals missing session parent rows. |
-| `tirith` | `approval`, `security`, `low-warn` | `tools/approval.py` | Auto-approves LOW/INFO security scanner warnings. |
-| `nostream` | `no-stream`, `quiet-stream`, `stream-shield` | `gateway/run.py` | Honors `display.streaming: false` to eliminate message flickers & 429 flood errors. |
-| `clean-think` | `think`, `reasoning`, `suppress-thinking` | `cli.py`<br>`gateway/stream_consumer.py` | Strips `<think>` tags and suppresses verbose CLI thinking popups. |
-| `smart-split` | `split`, `chunking`, `telegram-split` | `gateway/platforms/base.py` | Splits 4096+ char messages at paragraph breaks (`\n\n`) and repairs code fences. |
-| `terminal-cwd` | `cwd`, `terminal`, `deleted-workdir` | `tools/environments/base.py` | Falls back to safe parent directory when explicit workdir is deleted, avoiding exit 126. |
-| `state-guard` | `db-guard`, `anti-delete`, `state-db-guard`, `guard` | `tools/approval.py` | Hardline action-anchored guard preventing accidental deletion or truncation of live state.db |
+| `footer` | `runtime-footer`, `token`, `stats` | `gateway/runtime_footer.py`<br>`gateway/run_turn_persistence.py`<br>`gateway/run_turn_runner.py` | Renders Prompt totals, cache read tokens, outputs, latency, and context %. |
+| `menu` | `telegram-menu`, `menu-zh`, `i18n` | `hermes_cli/commands.py`<br>`hermes_cli/commands_platforms.py` | Localizes Telegram bot `/start`, `/new`, `/status`... command descriptions and `/help`. |
+| `smart-split` | `split`, `chunking`, `telegram-split` | `gateway/platforms/base_chunking.py`<br>`gateway/platforms/base.py` | Splits 4096+ char messages at paragraph breaks (`\n\n`) without stranding a heading, and repairs code fences. |
+| `quote-blocks` | `quote`, `blockquote`, `expandable-quote` | `plugins/platforms/telegram/telegram_markdown.py` | Converts a run of quoted lines as one blockquote: blank quoted lines stay inside, `>text` without a space counts, trailing `\|\|` marks the fold. |
+
+> Numbers are the `--only` / `--skip` indices (1–4, matching the interactive menu).
+> `db`, `clean-think`, `terminal-cwd` and `state-guard` were removed in v2.0.0: upstream v0.23.3+ covers them natively (`persistence/` refactor, `think_scrubber` CJK tags, `_usable_cwd` fallback, `HERMES_PROTECTED_SUBPATHS` guard). Use a `v1.x` tag if you still need the old behavior on an older tree.
 
 ---
 
